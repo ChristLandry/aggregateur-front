@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* === Sneat — Light === */
+    /* Body bg #f5f5f9, paper bg #fff, hover bg #f2f3f3 (gray-60) */
+    --background: 240 17% 97%;
+    --foreground: 212 31% 19%;          /* #22303e black */
+
+    --surface: 0 0% 100%;
+    --surface-muted: 180 4% 95%;        /* #f2f3f3 */
+
+    --card: 0 0% 100%;
+    --card-foreground: 212 31% 19%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 31% 19%;
+
+    /* Sneat primary #696cff */
+    --primary: 239 100% 71%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 180 4% 95%;
+    --secondary-foreground: 212 31% 19%;
+
+    --muted: 180 4% 95%;
+    --muted-foreground: 212 8% 43%;     /* #646e78 gray-700 body */
+
+    --accent: 239 100% 71%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 239 80% 64%;
+
+    --destructive: 9 100% 56%;          /* #ff3e1d */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 99 72% 54%;              /* #71dd37 */
+    --success-foreground: 0 0% 100%;
+
+    --warning: 40 100% 50%;             /* #ffab00 */
+    --warning-foreground: 0 0% 100%;
+
+    --info: 190 96% 47%;                /* #03c3ec */
+    --info-foreground: 0 0% 100%;
+
+    --border: 210 5% 90%;               /* #e4e6e8 gray-200 */
+    --input: 210 5% 90%;
+    --ring: 239 100% 71%;
+
+    --radius: 6px;
+
+    /* Sneat-style box shadows */
+    --shadow-xs: 0 1px 5px 0 rgba(34, 48, 62, 0.06);
+    --shadow-sm: 0 2px 6px 0 rgba(34, 48, 62, 0.08);
+    --shadow:    0 3px 8px 0 rgba(34, 48, 62, 0.10);
+    --shadow-lg: 0 4px 12px 0 rgba(34, 48, 62, 0.14);
+    --shadow-xl: 0 5px 22px 0 rgba(34, 48, 62, 0.18);
+
+    /* Primary "lifted" shadow used on active nav items and primary buttons */
+    --shadow-primary: 0 2px 4px 0 rgba(105, 108, 255, 0.40);
+  }
+
+  .dark {
+    /* === Sneat-inspired dark === */
+    --background: 222 24% 11%;          /* deep navy */
+    --foreground: 213 27% 92%;
+
+    --surface: 222 22% 14%;             /* card paper */
+    --surface-muted: 222 18% 18%;       /* hover bg */
+
+    --card: 222 22% 14%;
+    --card-foreground: 213 27% 92%;
+
+    --popover: 222 22% 14%;
+    --popover-foreground: 213 27% 92%;
+
+    --primary: 239 100% 75%;            /* brighter in dark */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 18% 18%;
+    --secondary-foreground: 213 27% 92%;
+
+    --muted: 222 18% 18%;
+    --muted-foreground: 213 12% 65%;
+
+    --accent: 239 100% 75%;
+    --accent-foreground: 0 0% 100%;
+    --accent-hover: 239 80% 68%;
+
+    --destructive: 9 100% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 99 72% 54%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 40 100% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --info: 190 96% 47%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 222 18% 22%;
+    --input: 222 18% 22%;
+    --ring: 239 100% 75%;
+
+    --shadow-xs: 0 1px 5px 0 rgba(0, 0, 0, 0.18);
+    --shadow-sm: 0 2px 6px 0 rgba(0, 0, 0, 0.22);
+    --shadow:    0 3px 8px 0 rgba(0, 0, 0, 0.28);
+    --shadow-lg: 0 4px 12px 0 rgba(0, 0, 0, 0.40);
+    --shadow-xl: 0 5px 22px 0 rgba(0, 0, 0, 0.50);
+    --shadow-primary: 0 2px 4px 0 rgba(124, 127, 255, 0.55);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-public-sans), "Public Sans", -apple-system, BlinkMacSystemFont,
+      "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+    font-size: 0.9375rem;               /* Sneat base 15px */
+    line-height: 1.375;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  /* Headings are noticeably darker than body text in Sneat */
+  h1, h2, h3, h4, h5, h6 {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+  /* Compact mode toggle (via [data-density="compact"] on <html>) */
+  html[data-density="compact"] .table-row-default {
+    height: 40px;
+  }
+  html[data-density="compact"] .card-padding-default {
+    padding: 1rem;
+  }
+}
+
+@layer utilities {
+  .text-display {
+    font-size: 32px;
+    line-height: 40px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+  .text-h1 {
+    font-size: 22px;
+    line-height: 30px;
+    font-weight: 600;
+  }
+  .text-h2 {
+    font-size: 18px;
+    line-height: 26px;
+    font-weight: 600;
+  }
+  .text-h3 {
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 600;
+  }
+  .text-body {
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .text-small {
+    font-size: 12px;
+    line-height: 18px;
+  }
+  .label-section {
+    font-size: 11px;
+    line-height: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+  }
+
+  /* Sneat-specific helpers */
+  .shadow-primary {
+    box-shadow: var(--shadow-primary);
+  }
+  .bg-primary-subtle {
+    background-color: hsl(var(--primary) / 0.16);
+  }
+  .text-primary-soft {
+    color: hsl(var(--primary));
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
