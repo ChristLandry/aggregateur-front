@@ -65,7 +65,7 @@ export interface ApiSubscriptionDto {
   partnerId: string;
   phoneNumber: string;
   phoneOperator: string;
-  bankCode: string;
+  bankCode?: string;
   status: number;
   subscribedAt: string;
   expiresAt?: string | null;
@@ -119,6 +119,7 @@ export interface ApiTransactionDto {
   externalRef?: string | null;
   bankAccount?: string | null;
   phoneNumber?: string | null;
+  extraData?: string | null;
 }
 
 export interface ApiMovementDto {
@@ -253,17 +254,23 @@ export function mapCustomer(dto: ApiCustomerDto): Customer {
 }
 
 export function mapSubscription(dto: ApiSubscriptionDto): Subscription {
+  const d = dto as ApiSubscriptionDto & Record<string, unknown>;
+  const id = String(d.subscriptionId ?? d.SubscriptionId ?? "");
+  const customerId = String(d.customerId ?? d.CustomerId ?? "");
+  const partnerId = String(d.partnerId ?? d.PartnerId ?? "");
+  const subscribedAt = String(d.subscribedAt ?? d.SubscribedAt ?? "");
+  const expiresAt = (d.expiresAt ?? d.ExpiresAt) as string | null | undefined;
   return {
-    id: dto.subscriptionId,
-    customerId: dto.customerId,
-    partnerId: dto.partnerId,
-    phoneNumber: dto.phoneNumber,
-    phoneOperator: dto.phoneOperator,
-    bankCode: dto.bankCode,
-    status: dto.status,
-    startDate: dto.subscribedAt,
-    endDate: dto.expiresAt ?? undefined,
-    createdAt: dto.subscribedAt,
+    id,
+    customerId,
+    partnerId,
+    phoneNumber: String(d.phoneNumber ?? d.PhoneNumber ?? ""),
+    phoneOperator: String(d.phoneOperator ?? d.PhoneOperator ?? ""),
+    bankCode: d.bankCode != null ? String(d.bankCode) : undefined,
+    status: Number(d.status ?? d.Status ?? 0),
+    startDate: subscribedAt,
+    endDate: expiresAt ?? undefined,
+    createdAt: subscribedAt,
   };
 }
 
@@ -323,6 +330,7 @@ export function mapTransaction(dto: ApiTransactionDto): Transaction {
     externalRef: dto.externalRef ?? undefined,
     bankAccount: dto.bankAccount ?? undefined,
     phoneNumber: dto.phoneNumber ?? undefined,
+    extraData: dto.extraData ?? undefined,
   };
 }
 
@@ -341,7 +349,8 @@ export function mapMovement(dto: ApiMovementDto): Movement {
   return {
     id: dto.movementId,
     transactionId: dto.transactionId,
-    partnerId: undefined,
+    schemaId: dto.schemaId,
+    lineOrder: dto.lineOrder,
     account: dto.account,
     side: dto.side,
     amount: dto.amount,
@@ -349,6 +358,9 @@ export function mapMovement(dto: ApiMovementDto): Movement {
     label: dto.label,
     code: dto.code ?? undefined,
     exploitant: dto.exploitant ?? undefined,
+    reference: dto.reference ?? undefined,
+    transactionDate: dto.transactionDate,
+    isFee: dto.isFee,
     status: 1,
     createdAt: dto.transactionDate,
   };
@@ -510,18 +522,15 @@ export function mapPartnerEndpoint(dto: ApiPartnerEndpointDto): PartnerEndpoint 
   };
 }
 
-/** Payload POST /api/v1/subscriptions (aligné Postman). */
-export function toCreateSubscriptionBody(
-  values: {
-    customerId: string;
-    bankAccountNumber: string;
-    bankCode: string;
-    phoneNumber: string;
-    phoneOperator: string;
-    expiresAt?: string | null;
-  },
-  partnerId: string,
-) {
+/** Payload POST /api/v1/subscriptions (aligné CreateSubscriptionDirectRequest). */
+export function toCreateSubscriptionBody(values: {
+  customerId: string;
+  bankAccountNumber: string;
+  bankCode?: string;
+  phoneNumber: string;
+  phoneOperator: string;
+  expiresAt?: string | null;
+}) {
   const expires =
     values.expiresAt === undefined || values.expiresAt === ""
       ? null
@@ -529,9 +538,7 @@ export function toCreateSubscriptionBody(
 
   return {
     customerId: values.customerId,
-    partnerId,
     bankAccountNumber: values.bankAccountNumber,
-    bankCode: values.bankCode,
     phoneNumber: values.phoneNumber,
     phoneOperator: values.phoneOperator,
     expiresAt: expires,

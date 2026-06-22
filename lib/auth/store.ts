@@ -17,7 +17,6 @@ interface AuthState {
   refreshToken: string | null;
   expiresAt: string | null;
   user: AuthUser | null;
-  partnerId: string | null;
 
   setSession: (s: {
     accessToken: string;
@@ -26,14 +25,8 @@ interface AuthState {
     role?: number;
   }) => void;
   setTokens: (accessToken: string, refreshToken: string, expiresAt: string) => void;
-  setPartnerId: (id: string | null) => void;
   clear: () => void;
 }
-
-const defaultPartnerId =
-  typeof process !== "undefined"
-    ? process.env.NEXT_PUBLIC_DEFAULT_PARTNER_ID ?? null
-    : null;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -42,7 +35,6 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       expiresAt: null,
       user: null,
-      partnerId: defaultPartnerId,
 
       setSession: ({ accessToken, refreshToken, expiresAt, role }) => {
         const payload = decodeToken(accessToken);
@@ -78,7 +70,6 @@ export const useAuthStore = create<AuthState>()(
           },
         }));
       },
-      setPartnerId: (id) => set({ partnerId: id }),
       clear: () =>
         set({
           accessToken: null,
@@ -95,7 +86,6 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: s.refreshToken,
         expiresAt: s.expiresAt,
         user: s.user,
-        partnerId: s.partnerId,
       }),
     },
   ),

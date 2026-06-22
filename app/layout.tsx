@@ -17,9 +17,14 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
+import { PLATFORM_DESCRIPTION, PLATFORM_NAME } from "@/lib/branding";
+
 export const metadata: Metadata = {
-  title: "AggregatorPlatform",
-  description: "Plateforme d'agrégation multi-partenaires",
+  title: {
+    default: PLATFORM_NAME,
+    template: `%s | ${PLATFORM_NAME}`,
+  },
+  description: PLATFORM_DESCRIPTION,
 };
 
 export default function RootLayout({

@@ -3,6 +3,7 @@
 import { useDashboardSummary } from "@/lib/api/dashboard";
 import { KpiCard } from "@/components/KpiCard";
 import { PageHeader } from "@/components/PageHeader";
+import { PLATFORM_NAME } from "@/lib/branding";
 import {
   Card,
   CardContent,
@@ -34,7 +35,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title="Tableau de bord"
-        description="Vue d'ensemble de la plateforme — actualisé toutes les 30 secondes."
+        description={`Vue d'ensemble de ${PLATFORM_NAME} — actualisé toutes les 30 secondes.`}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

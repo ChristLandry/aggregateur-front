@@ -21,7 +21,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PartnerSelector } from "@/components/PartnerSelector";
 import { useAuthStore } from "@/lib/auth/store";
+import { usePartnerStore } from "@/lib/partner/store";
+import { useRole } from "@/hooks/useRole";
 import { useLogout } from "@/lib/api/auth";
 import { UserRoleLabel } from "@/lib/enums";
 
@@ -50,7 +53,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const segments = pathname.split("/").filter(Boolean);
   const user = useAuthStore((s) => s.user);
   const expiresAt = useAuthStore((s) => s.expiresAt);
-  const partnerId = useAuthStore((s) => s.partnerId);
+  const currentPartner = usePartnerStore((s) => s.currentPartner);
+  const { canSelectPartner } = useRole();
   const logout = useLogout();
   const [profileOpen, setProfileOpen] = React.useState(false);
 
@@ -83,6 +87,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-2">
+        {canSelectPartner && <PartnerSelector />}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -131,7 +136,14 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               {user?.role !== null && user?.role !== undefined ? UserRoleLabel[user.role] : "—"}
             </div>
             <div><span className="text-muted-foreground">User ID :</span> <span className="font-mono text-xs">{user?.id ?? "—"}</span></div>
-            <div><span className="text-muted-foreground">Partner ID :</span> <span className="font-mono text-xs">{partnerId ?? "—"}</span></div>
+            {canSelectPartner && (
+              <div>
+                <span className="text-muted-foreground">Partenaire actif :</span>{" "}
+                {currentPartner
+                  ? `${currentPartner.partnerCode} (${currentPartner.partnerId})`
+                  : "—"}
+              </div>
+            )}
             <div><span className="text-muted-foreground">Expire le :</span> {expiresAt ?? "—"}</div>
           </div>
           <DialogFooter>

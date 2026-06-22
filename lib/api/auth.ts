@@ -6,6 +6,7 @@ import { notifyError, notifySuccess } from "./notify";
 import type { LoginRequest, LoginResponse, ApiResponse } from "./types";
 import { mapLogin, type ApiLoginDto } from "./mappers";
 import { useAuthStore } from "@/lib/auth/store";
+import { usePartnerStore } from "@/lib/partner/store";
 
 export function useLogin() {
   return useMutation({
@@ -20,9 +21,6 @@ export function useLogin() {
         expiresAt: data.expiresAt,
         role: data.role,
       });
-      if (data.partnerId) {
-        useAuthStore.getState().setPartnerId(data.partnerId);
-      }
       notifySuccess("Connexion réussie");
     },
     onError: (error) => {
@@ -53,6 +51,7 @@ export function useLogout() {
     },
     onSettled: () => {
       useAuthStore.getState().clear();
+      usePartnerStore.getState().clear();
       if (typeof window !== "undefined") window.location.href = "/login";
     },
   });

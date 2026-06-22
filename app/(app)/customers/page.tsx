@@ -16,11 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { CustomerForm } from "@/components/forms/CustomerForm";
 import { useCreateCustomer, useCustomers } from "@/lib/api/customers";
+import { useHasPartnerApiContext } from "@/lib/partner/context";
 import { CustomerStatusLabel, KycStatusLabel } from "@/lib/enums";
 import type { Customer } from "@/lib/api/types";
 
 export default function CustomersPage() {
   const router = useRouter();
+  const hasApiContext = useHasPartnerApiContext();
   const { data, isLoading, isError } = useCustomers();
   const create = useCreateCustomer();
   const [open, setOpen] = React.useState(false);
@@ -104,7 +106,13 @@ export default function CustomersPage() {
         rowKey={(r, i) => r.id ?? `customer-${i}`}
         searchPlaceholder="Rechercher un client…"
         searchAccessor={(r) => `${r.firstName} ${r.lastName} ${r.email ?? ""} ${r.id}`}
-        emptyMessage={isError ? "Impossible de charger la liste des clients." : "Aucun client trouvé."}
+        emptyMessage={
+          !hasApiContext
+            ? "Clé API partenaire non configurée (NEXT_PUBLIC_WEB_PARTNER_APIKEY)."
+            : isError
+              ? "Impossible de charger la liste des clients."
+              : "Aucun client trouvé."
+        }
       />
     </div>
   );

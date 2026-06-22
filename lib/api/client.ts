@@ -6,14 +6,30 @@ import axios, {
   AxiosRequestConfig,
   InternalAxiosRequestConfig,
 } from "axios";
+import { toast } from "sonner";
 import { useAuthStore } from "@/lib/auth/store";
+import { usePartnerStore } from "@/lib/partner/store";
+import { resolvePartnerApiKey } from "@/lib/partner/api-key";
+import { toastWebPartnerForbidden } from "./partner-toast";
 import type { ApiResponse, LoginResponse } from "./types";
 import { getApiBaseUrl } from "./config";
 import { mapLogin, type ApiLoginDto } from "./mappers";
+import {
+  isKnownPartnerApiError,
+  PARTNER_ERROR_MESSAGES,
+  resolveApiErrorMessage,
+  shouldToastPartnerApiError,
+} from "./api-errors";
 
 const BASE_URL = getApiBaseUrl();
 
-// === Endpoints that must NOT carry the X-Partner-Id header ===
+/**
+ * Routes sans header X-Partner-ApiKey :
+ * - auth (login, refresh, logout)
+ * - partners admin (dont allowed-codes)
+ * - dashboard, reports, accounting admin
+ * - financial/transactions* (JWT admin uniquement)
+ */
 const PARTNER_AGNOSTIC_PATHS = [
   /^\/api\/v1\/auth\//,
   /^\/api\/v1\/partners(?:\/|$|\?)/,
@@ -21,11 +37,12 @@ const PARTNER_AGNOSTIC_PATHS = [
   /^\/api\/v1\/reports\//,
   /^\/api\/v1\/accounting\//,
   /^\/api\/v1\/partner-endpoints(?:\/|$|\?)/,
+  /^\/api\/v1\/financial\/transactions(?:\/|$|\?)/,
   /^\/health$/,
   /^\/metrics$/,
 ];
 
-function shouldSendPartnerHeader(url?: string): boolean {
+function shouldSendPartnerApiKeyHeader(url?: string): boolean {
   if (!url) return false;
   return !PARTNER_AGNOSTIC_PATHS.some((rx) => rx.test(url));
 }
@@ -33,23 +50,26 @@ function shouldSendPartnerHeader(url?: string): boolean {
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
-  // We want raw 4xx errors to surface so React Query can flag them.
   validateStatus: (s) => s >= 200 && s < 300,
 });
 
-// === Request interceptor : attaches Authorization + (optionally) X-Partner-Id ===
 apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const { accessToken, partnerId } = useAuthStore.getState();
+  const { accessToken } = useAuthStore.getState();
   if (accessToken) {
     config.headers.set("Authorization", `Bearer ${accessToken}`);
   }
-  if (partnerId && shouldSendPartnerHeader(config.url ?? undefined)) {
-    config.headers.set("X-Partner-Id", partnerId);
+  const apiKey = resolvePartnerApiKey();
+  const hasExplicitPartnerKey = config.headers.has("X-Partner-ApiKey");
+  if (
+    !hasExplicitPartnerKey &&
+    apiKey &&
+    shouldSendPartnerApiKeyHeader(config.url ?? undefined)
+  ) {
+    config.headers.set("X-Partner-ApiKey", apiKey);
   }
   return config;
 });
 
-// === Refresh-flow state ===
 let isRefreshing = false;
 let pendingRequests: Array<(token: string | null) => void> = [];
 
@@ -76,7 +96,6 @@ async function performRefresh(refreshToken: string): Promise<LoginResponse | nul
   }
 }
 
-// === Response interceptor : handles 401 + transparent refresh ===
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiResponse<unknown>>) => {
@@ -89,6 +108,7 @@ apiClient.interceptors.response.use(
       const { refreshToken } = useAuthStore.getState();
       if (!refreshToken) {
         useAuthStore.getState().clear();
+        usePartnerStore.getState().clear();
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
           window.location.href = "/login";
         }
@@ -114,6 +134,7 @@ apiClient.interceptors.response.use(
       if (!refreshed) {
         broadcastRefresh(null);
         useAuthStore.getState().clear();
+        usePartnerStore.getState().clear();
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
           window.location.href = "/login";
         }
@@ -130,11 +151,22 @@ apiClient.interceptors.response.use(
       return apiClient.request(original);
     }
 
+    const raw = error.response?.data as ApiResponse<unknown> & Record<string, unknown>;
+    const { success, errorCode, errorMessage } = readEnvelope(raw ?? {});
+    if (success === false && errorCode) {
+      const apiErr = new ApiError(errorMessage ?? "Erreur API", errorCode);
+      if (apiErr.code === "WEB_PARTNER_FORBIDDEN") {
+        toastWebPartnerForbidden();
+      } else if (isKnownPartnerApiError(apiErr) && shouldToastPartnerApiError(apiErr.code)) {
+        toast.error(resolveApiErrorMessage(apiErr));
+      }
+      return Promise.reject(apiErr);
+    }
+
     return Promise.reject(error);
   },
 );
 
-// === Helpers : unwrap envelope ===
 export async function apiGet<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   const r = await apiClient.get<ApiResponse<T>>(url, config);
   return unwrap(r.data);
@@ -156,11 +188,27 @@ export async function apiDelete<T>(url: string, config?: AxiosRequestConfig): Pr
   return unwrap(r.data);
 }
 
+function readEnvelope<T>(env: ApiResponse<T> & Record<string, unknown>): {
+  success?: boolean;
+  data?: T;
+  errorCode?: string;
+  errorMessage?: string;
+} {
+  return {
+    success: (env.success ?? env.Success) as boolean | undefined,
+    data: (env.data ?? env.Data) as T | undefined,
+    errorCode: (env.errorCode ?? env.ErrorCode) as string | undefined,
+    errorMessage: (env.errorMessage ?? env.ErrorMessage) as string | undefined,
+  };
+}
+
 function unwrap<T>(env: ApiResponse<T>): T {
-  if (env && env.success === false) {
-    throw new ApiError(env.errorMessage ?? "Erreur API", env.errorCode);
+  const raw = env as ApiResponse<T> & Record<string, unknown>;
+  const { success, data, errorCode, errorMessage } = readEnvelope(raw);
+  if (success === false) {
+    throw new ApiError(errorMessage ?? "Erreur API", errorCode);
   }
-  return env.data as T;
+  return data as T;
 }
 
 export class ApiError extends Error {
@@ -172,35 +220,29 @@ export class ApiError extends Error {
   }
 }
 
-/** Extracts a user-friendly message from any axios/api error. */
 export function getErrorMessage(error: unknown, fallback = "Une erreur est survenue"): string {
-  if (error instanceof ApiError) return error.message;
-  if (axios.isAxiosError(error)) {
-    const data = error.response?.data as ApiResponse<unknown> | undefined;
-    return (
-      data?.errorMessage ??
-      data?.errorCode ??
-      error.message ??
-      fallback
-    );
-  }
-  if (error instanceof Error) return error.message;
-  return fallback;
+  return resolveApiErrorMessage(error, fallback);
 }
 
-/** Toast-friendly message with errorCode + errorMessage when available. */
 export function formatApiErrorForToast(
   error: unknown,
   fallback = "Une erreur est survenue",
 ): string {
   if (error instanceof ApiError) {
+    if (error.code && shouldToastPartnerApiError(error.code)) {
+      return resolveApiErrorMessage(error);
+    }
     if (error.code && error.message) return `${error.code} — ${error.message}`;
     return error.message || fallback;
   }
   if (axios.isAxiosError(error)) {
-    const data = error.response?.data as ApiResponse<unknown> | undefined;
-    const code = data?.errorCode;
-    const msg = data?.errorMessage ?? error.message;
+    const raw = error.response?.data as ApiResponse<unknown> & Record<string, unknown>;
+    const { errorCode, errorMessage } = readEnvelope(raw ?? {});
+    const code = errorCode;
+    if (code && shouldToastPartnerApiError(code)) {
+      return PARTNER_ERROR_MESSAGES[code];
+    }
+    const msg = errorMessage ?? error.message;
     if (code && msg) return `${code} — ${msg}`;
     return code ?? msg ?? fallback;
   }

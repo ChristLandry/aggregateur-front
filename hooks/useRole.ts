@@ -14,5 +14,7 @@ export function useRole() {
     isPartner: role === UserRole.Partner,
     isReadOnly: role === UserRole.ReadOnly,
     canManageAccounting: hasRole(role, ROLE_FINANCE_SET),
+    /** Admin / SuperAdmin / Finance — sélecteur partenaire en topbar. */
+    canSelectPartner: hasRole(role, ROLE_FINANCE_SET),
   };
 }

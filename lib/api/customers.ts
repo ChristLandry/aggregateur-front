@@ -13,10 +13,16 @@ import {
   type ApiCustomerDto,
   type ApiSubscriptionDto,
 } from "./mappers";
-import { useAuthStore } from "@/lib/auth/store";
+import { usePartnerStore } from "@/lib/partner/store";
+import { hasPartnerApiContext, useHasPartnerApiContext } from "@/lib/partner/context";
 import type { CustomerFormValues } from "@/lib/schemas/customer";
 import type { SubscriptionFormValues } from "@/lib/schemas/subscription";
-import { subscriptionsKeys } from "./subscriptions";
+import {
+  resolveApiKeyForPartnerScope,
+  subscriptionsKeys,
+  useSearchSubscriptions,
+} from "./subscriptions";
+import { SUBSCRIPTION_PARTNER_WEB } from "@/lib/subscriptions/constants";
 import {
   CustomerStatus,
   CustomerStatusLabel,
@@ -32,41 +38,37 @@ export const customersKeys = {
 };
 
 export function useCustomers() {
-  const partnerId = useAuthStore((s) => s.partnerId);
+  const partnerId = usePartnerStore((s) => s.currentPartner?.partnerId);
+  const hasContext = useHasPartnerApiContext();
   return useQuery({
     queryKey: customersKeys.list(partnerId),
     queryFn: async () => {
       const rows = await apiGet<ApiCustomerDto[]>("/api/v1/customers");
       return rows.map(mapCustomer);
     },
+    enabled: hasContext,
     meta: { errorFallback: "Impossible de charger la liste des clients" },
   });
 }
 
 export function useCustomer(id: string | undefined) {
+  const hasContext = useHasPartnerApiContext();
   return useQuery({
     queryKey: customersKeys.detail(id ?? ""),
     queryFn: async () => {
       const dto = await apiGet<ApiCustomerDto>(`/api/v1/customers/${id}`);
       return mapCustomer(dto);
     },
-    enabled: !!id,
+    enabled: !!id && hasContext,
     meta: { errorFallback: "Impossible de charger le client" },
   });
 }
 
 export function useCustomerSubscriptions(id: string | undefined) {
-  return useQuery({
-    queryKey: customersKeys.subscriptions(id ?? ""),
-    queryFn: async () => {
-      const rows = await apiGet<ApiSubscriptionDto[]>(
-        `/api/v1/customers/${id}/subscriptions`,
-      );
-      return rows.map(mapSubscription);
-    },
-    enabled: !!id,
-    meta: { errorFallback: "Impossible de charger les souscriptions" },
-  });
+  return useSearchSubscriptions(
+    { partnerScope: SUBSCRIPTION_PARTNER_WEB, customerId: id },
+    { enabled: !!id },
+  );
 }
 
 function customerUpdateSuccessMessage(patch: Partial<Customer>): string {
@@ -86,6 +88,11 @@ export function useCreateCustomer() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: Partial<CustomerFormValues>) => {
+      if (!hasPartnerApiContext()) {
+        throw new Error(
+          "Sélectionnez un partenaire dans la topbar pour créer un client.",
+        );
+      }
       const customerId = await apiPost<string>(
         "/api/v1/customers",
         toCreateCustomerBody(values),
@@ -121,16 +128,17 @@ export function useCreateCustomerSubscription(customerId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: SubscriptionFormValues) => {
-      const partnerId = useAuthStore.getState().partnerId;
-      if (!partnerId) {
-        throw new Error("Partenaire requis pour créer une souscription");
+      const apiKey = resolveApiKeyForPartnerScope(SUBSCRIPTION_PARTNER_WEB);
+      if (!apiKey) {
+        throw new Error("Clé API partenaire manquante.");
       }
       const subId = await apiPost<string>(
         "/api/v1/subscriptions",
-        toCreateSubscriptionBody(
-          { ...values, customerId: values.customerId || customerId },
-          partnerId,
-        ),
+        toCreateSubscriptionBody({
+          ...values,
+          customerId: values.customerId || customerId,
+        }),
+        { headers: { "X-Partner-ApiKey": apiKey } },
       );
       const dto = await apiGet<ApiSubscriptionDto>(`/api/v1/subscriptions/${subId}`);
       return mapSubscription(dto);

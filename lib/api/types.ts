@@ -143,6 +143,7 @@ export interface Transaction {
   externalRef?: string;
   bankAccount?: string;
   phoneNumber?: string;
+  extraData?: string;
 }
 
 export interface TransactionQuery {
@@ -159,6 +160,8 @@ export interface TransactionQuery {
 export interface Movement {
   id: string;
   transactionId: string;
+  schemaId: string;
+  lineOrder: number;
   partnerId?: string;
   account: string;
   side: number; // LedgerSide
@@ -167,6 +170,9 @@ export interface Movement {
   label?: string;
   code?: string;
   exploitant?: string;
+  reference?: string;
+  transactionDate: string;
+  isFee: boolean;
   status: number; // AccountingStatus
   createdAt: string;
   appliedAt?: string;

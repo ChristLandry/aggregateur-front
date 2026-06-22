@@ -30,7 +30,7 @@ import { formatDate } from "@/lib/utils";
 export default function SubscriptionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading } = useSubscription(id);
-  const change = useChangeSubscriptionStatus(id);
+  const change = useChangeSubscriptionStatus(id, data?.partnerId);
 
   if (isLoading || !data) {
     return (

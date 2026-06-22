@@ -15,14 +15,26 @@ import {
   type ApiPartnerBalanceDto,
 } from "./mappers";
 import { PartnerStatus, PartnerStatusLabel } from "@/lib/enums";
+import { usePartnerStore } from "@/lib/partner/store";
 
 export const partnersKeys = {
   all: ["partners"] as const,
   list: () => [...partnersKeys.all, "list"] as const,
+  allowedCodes: () => [...partnersKeys.all, "allowed-codes"] as const,
   detail: (id: string) => [...partnersKeys.all, "detail", id] as const,
   account: (id: string) => [...partnersKeys.all, "account", id] as const,
   balance: (id: string) => [...partnersKeys.all, "balance", id] as const,
 };
+
+/** Codes enum autorisés à la création (GET public, sans clé partenaire). */
+export function usePartnerAllowedCodes(enabled = true) {
+  return useQuery({
+    queryKey: partnersKeys.allowedCodes(),
+    queryFn: async () => apiGet<string[]>("/api/v1/partners/allowed-codes"),
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
 export function usePartners() {
   return useQuery({
@@ -71,15 +83,21 @@ export function usePartnerBalance(id: string | undefined) {
   });
 }
 
+export interface CreatePartnerResult {
+  partner: Partner;
+  apiKey: string;
+}
+
 export function useCreatePartner() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Partial<Partner>) => {
+    mutationFn: async (body: Partial<Partner>): Promise<CreatePartnerResult> => {
       const created = await apiPost<{ partnerId: string; partnerCode: string; apiKey: string }>(
         "/api/v1/partners",
         toCreatePartnerBody(body),
       );
-      return mapPartner({
+      const apiKey = created.apiKey ?? "";
+      const partner = mapPartner({
         partnerId: created.partnerId,
         partnerCode: created.partnerCode,
         name: body.name ?? created.partnerCode,
@@ -91,6 +109,14 @@ export function useCreatePartner() {
         requireHmac: false,
         createdAt: new Date().toISOString(),
       });
+      if (apiKey && partner.id) {
+        usePartnerStore.getState().registerPartnerApiKey(
+          partner.id,
+          partner.code,
+          apiKey,
+        );
+      }
+      return { partner, apiKey };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: partnersKeys.list() });
@@ -146,6 +172,9 @@ export function useRotatePartnerKey(id: string) {
       if (!apiKey) {
         throw new Error("Le serveur n'a pas renvoyé la clé API");
       }
+      const partner = await apiGet<ApiPartnerDto>(`/api/v1/partners/${id}`);
+      const mapped = mapPartner(partner);
+      usePartnerStore.getState().registerPartnerApiKey(id, mapped.code, apiKey);
       return { apiKey };
     },
     onSuccess: () => {

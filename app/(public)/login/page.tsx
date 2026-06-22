@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { loginSchema, type LoginFormValues } from "@/lib/schemas/auth";
 import { useLogin } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/auth/store";
+import { PLATFORM_LOGIN_FOOTER, PLATFORM_NAME } from "@/lib/branding";
 
 /**
  * Sneat-style auth page: centered paper card on a tinted page background,
@@ -69,7 +70,7 @@ function LoginCard() {
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-primary">
           <Wallet className="h-6 w-6" />
         </div>
-        <span className="text-[20px] font-semibold tracking-tight">Aggregator</span>
+        <span className="text-[20px] font-semibold tracking-tight">{PLATFORM_NAME}</span>
       </div>
 
       <div className="mb-6 text-center">
@@ -160,7 +161,7 @@ function LoginCard() {
       </Form>
 
       <p className="mt-6 text-center text-xs text-muted-foreground">
-        AggregatorPlatform · accès réservé aux partenaires intégrés
+        {PLATFORM_LOGIN_FOOTER}
       </p>
     </div>
   );

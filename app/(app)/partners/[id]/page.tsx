@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronLeft, Copy, KeyRound, Loader2, RefreshCw } from "lucide-react";
+import { ChevronLeft, KeyRound, Loader2, RefreshCw } from "lucide-react";
+import { ApiKeyRevealCard } from "@/components/partners/ApiKeyRevealCard";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,14 +37,6 @@ import { PartnerForm } from "@/components/forms/PartnerForm";
 import { PartnerStatusBadge } from "@/components/StatusBadge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   usePartner,
   useUpdatePartner,
   useChangePartnerStatus,
@@ -54,7 +47,6 @@ import {
 import { PartnerStatus, PartnerStatusLabel } from "@/lib/enums";
 import { balanceSchema, type BalanceFormValues } from "@/lib/schemas/partner";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { notifySuccess } from "@/lib/api/notify";
 import { toast } from "sonner";
 
 export default function PartnerDetailPage() {
@@ -67,16 +59,6 @@ export default function PartnerDetailPage() {
   const rotateKey = useRotatePartnerKey(id);
   const setBalance = useSetPartnerBalance(id);
   const [revealedApiKey, setRevealedApiKey] = React.useState<string | null>(null);
-  const [apiKeyDialogOpen, setApiKeyDialogOpen] = React.useState(false);
-
-  const copyApiKey = React.useCallback(async (key: string) => {
-    try {
-      await navigator.clipboard.writeText(key);
-      notifySuccess("Clé copiée dans le presse-papiers");
-    } catch {
-      toast.error("Impossible de copier la clé");
-    }
-  }, []);
 
   const balanceForm = useForm<BalanceFormValues>({
     resolver: zodResolver(balanceSchema),
@@ -235,31 +217,24 @@ export default function PartnerDetailPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-start gap-3 rounded-md bg-surface-muted p-3 font-mono text-xs">
-                <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="break-all">
-                  {revealedApiKey ?? "••••••••••••••••••••••••"}
-                </span>
-              </div>
+              {!revealedApiKey && (
+                <div className="flex items-start gap-3 rounded-md bg-surface-muted p-3 font-mono text-xs">
+                  <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span>••••••••••••••••••••••••</span>
+                </div>
+              )}
               {revealedApiKey && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => copyApiKey(revealedApiKey)}
-                >
-                  <Copy className="h-4 w-4" />
-                  Copier la clé
-                </Button>
+                <ApiKeyRevealCard
+                  apiKey={revealedApiKey}
+                  title="Nouvelle clé API"
+                  onDismiss={() => setRevealedApiKey(null)}
+                />
               )}
               <Button
                 variant="destructive"
                 onClick={() =>
                   rotateKey.mutate(undefined, {
-                    onSuccess: (result) => {
-                      setRevealedApiKey(result.apiKey);
-                      setApiKeyDialogOpen(true);
-                    },
+                    onSuccess: (result) => setRevealedApiKey(result.apiKey),
                   })
                 }
                 disabled={rotateKey.isPending}
@@ -267,34 +242,6 @@ export default function PartnerDetailPage() {
                 {rotateKey.isPending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
                 Renouveler la clé
               </Button>
-
-              <Dialog open={apiKeyDialogOpen} onOpenChange={setApiKeyDialogOpen}>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Nouvelle clé API</DialogTitle>
-                    <DialogDescription>
-                      Copiez cette clé maintenant. Elle ne sera plus affichée en clair
-                      après fermeture de cette fenêtre.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="rounded-md border border-border bg-surface-muted p-4 font-mono text-sm break-all">
-                    {revealedApiKey}
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => revealedApiKey && copyApiKey(revealedApiKey)}
-                    >
-                      <Copy className="h-4 w-4" />
-                      Copier
-                    </Button>
-                    <Button type="button" onClick={() => setApiKeyDialogOpen(false)}>
-                      J&apos;ai noté la clé
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
               <div className="text-xs text-muted-foreground">
                 Dernière mise à jour : {partner.updatedAt ? formatDate(partner.updatedAt) : "—"}
               </div>
