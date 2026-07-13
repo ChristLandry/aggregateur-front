@@ -11,13 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,11 +23,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { SubscriptionForm } from "@/components/forms/SubscriptionForm";
 import { SubscriptionStatusBadge } from "@/components/StatusBadge";
 import {
   useSearchSubscriptions,
-  useCreateSubscription,
   SUBSCRIPTION_STATUS_ALL,
   type SubscriptionSearchFilters,
 } from "@/lib/api/subscriptions";
@@ -96,9 +87,6 @@ function SubscriptionsPageContent() {
   }, [applied]);
 
   const { data, isLoading, isError, error } = useSearchSubscriptions(applied);
-  const create = useCreateSubscription(applied.partnerScope);
-  const [open, setOpen] = React.useState(false);
-
   const isWebDraft = isWebPartnerScope(draft.partnerScope);
 
   function pushFilters(filters: SubscriptionSearchFilters) {
@@ -144,7 +132,10 @@ function SubscriptionsPageContent() {
       header: "Client",
       cell: (r) =>
         r.customerId ? (
-          <Link className="hover:underline" href={`/customers/${r.customerId}`}>
+          <Link
+            className="hover:underline"
+            href={`/subscriptions?customerId=${r.customerId}`}
+          >
             <span className="font-mono text-xs">{shortId(r.customerId)}</span>
           </Link>
         ) : (
@@ -201,29 +192,13 @@ function SubscriptionsPageContent() {
       <div>
         <PageHeader
           title="Souscriptions"
-          description="Choisissez le partenaire dans les filtres de recherche. WEB : jusqu'à 5000 lignes (take) selon les dates de souscription."
+          description="Par défaut (WEB) : toutes les souscriptions. Filtrez par partenaire métier si besoin."
           actions={
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus /> Nouvelle
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Créer une souscription</DialogTitle>
-                </DialogHeader>
-                <SubscriptionForm
-                  loading={create.isPending}
-                  onCancel={() => setOpen(false)}
-                  onSubmit={async (v) => {
-                    const created = await create.mutateAsync(v);
-                    setOpen(false);
-                    if (created?.id) router.push(`/subscriptions/${created.id}`);
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
+            <Button asChild>
+              <Link href="/subscriptions/onboard">
+                <Plus /> Nouvelle
+              </Link>
+            </Button>
           }
         />
 

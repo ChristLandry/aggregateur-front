@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiGet, apiPost, apiPut, apiDelete } from "./client";
+import { apiGet, apiPost, apiPut, apiDelete, ApiError } from "./client";
 import { notifyError, notifySuccess } from "./notify";
 import type {
   AccountingLine,
@@ -19,12 +19,18 @@ import {
   mapPaginatedMovements,
   mapPaginatedTransactions,
   mapTransaction,
+  toCreateAccountingSchemaBody,
+  toSchemaLineBody,
   type ApiAccountingLineDto,
   type ApiAccountingSchemaDto,
   type ApiMovementDto,
   type ApiPaginatedResult,
   type ApiTransactionDto,
 } from "./mappers";
+import type {
+  AccountingLineFormValues,
+  AccountingSchemaFormValues,
+} from "@/lib/schemas/accounting";
 
 export const accountingKeys = {
   all: ["accounting"] as const,
@@ -62,8 +68,14 @@ export function useAccountingSchema(id: string | undefined) {
 export function useCreateSchema() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: Partial<AccountingSchema>) => {
-      const schemaId = await apiPost<string>("/api/v1/accounting/schemas", body);
+    mutationFn: async (
+      body: Partial<AccountingSchema> | Partial<AccountingSchemaFormValues>,
+    ) => {
+      const payload = toCreateAccountingSchemaBody(body);
+      const schemaId = await apiPost<string>(
+        "/api/v1/accounting/schemas",
+        payload,
+      );
       const dto = await apiGet<ApiAccountingSchemaDto>(
         `/api/v1/accounting/schemas/${schemaId}`,
       );
@@ -100,13 +112,15 @@ export function useUpdateSchema(id: string) {
 export function useAddSchemaLine(schemaId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (line: Partial<AccountingLine>) => {
+    mutationFn: async (
+      line: Partial<AccountingLine> | Partial<AccountingLineFormValues>,
+    ) => {
       const lineId = await apiPost<string>(
         `/api/v1/accounting/schemas/${schemaId}/lines`,
-        line,
+        toSchemaLineBody(line),
       );
       return mapAccountingLine(
-        { ...line, lineId } as ApiAccountingLineDto,
+        { ...toSchemaLineBody(line), lineId } as ApiAccountingLineDto,
         schemaId,
       );
     },
@@ -114,15 +128,54 @@ export function useAddSchemaLine(schemaId: string) {
       qc.invalidateQueries({ queryKey: accountingKeys.schema(schemaId) });
       notifySuccess("Ligne ajoutée");
     },
-    onError: (e) => notifyError(e, "Ajout de ligne impossible"),
+    onError: (e) => {
+      // UX détaillée dans SchemaLineForm (focus + suggestion d'ordre)
+      if (e instanceof ApiError && e.code === "LINE_ORDER_DUPLICATE") return;
+      notifyError(e, "Ajout de ligne impossible");
+    },
+  });
+}
+
+export function useUpdateSchemaLine(schemaId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      lineId,
+      values,
+    }: {
+      lineId: string;
+      values: Partial<AccountingLine> | Partial<AccountingLineFormValues>;
+    }) => {
+      if (!lineId) {
+        throw new Error("Identifiant de ligne manquant.");
+      }
+      await apiPut<void>(
+        `/api/v1/accounting/schemas/${schemaId}/lines/${lineId}`,
+        toSchemaLineBody(values),
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: accountingKeys.schema(schemaId) });
+      notifySuccess("Ligne mise à jour");
+    },
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === "LINE_ORDER_DUPLICATE") return;
+      notifyError(e, "Modification de ligne impossible");
+    },
   });
 }
 
 export function useDeleteSchemaLine(schemaId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (lineId: string) =>
-      apiDelete<void>(`/api/v1/accounting/schemas/${schemaId}/lines/${lineId}`),
+    mutationFn: (lineId: string) => {
+      if (!lineId) {
+        throw new Error("Identifiant de ligne manquant.");
+      }
+      return apiDelete<void>(
+        `/api/v1/accounting/schemas/${schemaId}/lines/${lineId}`,
+      );
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: accountingKeys.schema(schemaId) });
       notifySuccess("Ligne supprimée");

@@ -29,6 +29,8 @@ const BASE_URL = getApiBaseUrl();
  * - partners admin (dont allowed-codes)
  * - dashboard, reports, accounting admin
  * - financial/transactions* (JWT admin uniquement)
+ * - clients racines
+ * Bank/wallet/subscriptions : clé partenaire requise (envoyée par défaut ou explicitement).
  */
 const PARTNER_AGNOSTIC_PATHS = [
   /^\/api\/v1\/auth\//,
@@ -38,6 +40,7 @@ const PARTNER_AGNOSTIC_PATHS = [
   /^\/api\/v1\/accounting\//,
   /^\/api\/v1\/partner-endpoints(?:\/|$|\?)/,
   /^\/api\/v1\/financial\/transactions(?:\/|$|\?)/,
+  /^\/api\/v1\/clients(?:\/|$|\?)/,
   /^\/health$/,
   /^\/metrics$/,
 ];
@@ -49,7 +52,10 @@ function shouldSendPartnerApiKeyHeader(url?: string): boolean {
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  headers: { "Content-Type": "application/json" },
+  headers: {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  },
   validateStatus: (s) => s >= 200 && s < 300,
 });
 
@@ -58,8 +64,13 @@ apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   if (accessToken) {
     config.headers.set("Authorization", `Bearer ${accessToken}`);
   }
+  if (!config.headers.get("Accept")) {
+    config.headers.set("Accept", "application/json");
+  }
   const apiKey = resolvePartnerApiKey();
-  const hasExplicitPartnerKey = config.headers.has("X-Partner-ApiKey");
+  const hasExplicitPartnerKey =
+    !!config.headers.get("X-Partner-ApiKey") ||
+    !!config.headers.get("x-partner-apikey");
   if (
     !hasExplicitPartnerKey &&
     apiKey &&
@@ -151,16 +162,45 @@ apiClient.interceptors.response.use(
       return apiClient.request(original);
     }
 
-    const raw = error.response?.data as ApiResponse<unknown> & Record<string, unknown>;
-    const { success, errorCode, errorMessage } = readEnvelope(raw ?? {});
-    if (success === false && errorCode) {
-      const apiErr = new ApiError(errorMessage ?? "Erreur API", errorCode);
-      if (apiErr.code === "WEB_PARTNER_FORBIDDEN") {
-        toastWebPartnerForbidden();
-      } else if (isKnownPartnerApiError(apiErr) && shouldToastPartnerApiError(apiErr.code)) {
-        toast.error(resolveApiErrorMessage(apiErr));
+    const raw = error.response?.data as
+      | (ApiResponse<unknown> & Record<string, unknown>)
+      | undefined;
+
+    // ApiResponse métier (ex. BadRequest ToResponse / Fail)
+    if (raw && typeof raw === "object") {
+      const { success, errorCode, errorMessage } = readEnvelope(raw);
+      if (success === false || errorCode) {
+        const apiErr = new ApiError(
+          errorMessage ?? "Erreur API",
+          errorCode ?? "API_ERROR",
+        );
+        if (apiErr.code === "WEB_PARTNER_FORBIDDEN") {
+          toastWebPartnerForbidden();
+        } else if (
+          isKnownPartnerApiError(apiErr) &&
+          shouldToastPartnerApiError(apiErr.code)
+        ) {
+          toast.error(resolveApiErrorMessage(apiErr));
+        }
+        return Promise.reject(apiErr);
       }
-      return Promise.reject(apiErr);
+
+      // ProblemDetails ASP.NET (validation model binding)
+      const problem = raw as {
+        title?: string;
+        detail?: string;
+        errors?: Record<string, string[]>;
+      };
+      if (problem.errors || problem.title) {
+        const details = problem.errors
+          ? Object.entries(problem.errors)
+              .map(([k, v]) => `${k}: ${(v ?? []).join(", ")}`)
+              .join(" · ")
+          : problem.detail ?? problem.title;
+        return Promise.reject(
+          new ApiError(details || "Requête invalide", "VALIDATION_ERROR"),
+        );
+      }
     }
 
     return Promise.reject(error);

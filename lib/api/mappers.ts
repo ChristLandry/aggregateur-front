@@ -26,8 +26,11 @@ export interface ApiPartnerDto {
   status: number;
   currency: string;
   webhookUrl?: string | null;
-  rateLimitPerMin: number;
-  requireHmac: boolean;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  lowBalanceThresholdPercent?: number | null;
+  lowBalanceReferenceAmount?: number | null;
+  alertChannels?: number | null;
   createdAt: string;
   updatedAt?: string | null;
 }
@@ -204,37 +207,63 @@ const defaultApiBase =
 
 // --- Mappers API → modèle front ---
 
-export function mapPartner(dto: ApiPartnerDto): Partner {
+export function mapPartner(dto: ApiPartnerDto, balanceOverride?: number): Partner {
+  const d = dto as ApiPartnerDto & Record<string, unknown>;
   return {
-    id: dto.partnerId,
-    code: dto.partnerCode,
-    name: dto.name,
-    status: dto.status,
-    accountCode: dto.accountCode ?? undefined,
-    currency: dto.currency,
-    balance: 0,
-    baseUrl: dto.baseUrl,
-    webhookUrl: dto.webhookUrl ?? undefined,
-    rateLimitPerMin: dto.rateLimitPerMin,
-    requireHmac: dto.requireHmac,
-    createdAt: dto.createdAt,
-    updatedAt: dto.updatedAt ?? undefined,
+    id: String(d.partnerId ?? d.PartnerId ?? ""),
+    code: String(d.partnerCode ?? d.PartnerCode ?? ""),
+    name: String(d.name ?? d.Name ?? ""),
+    status: Number(d.status ?? d.Status ?? 0),
+    accountCode: (d.accountCode ?? d.AccountCode) as string | undefined,
+    currency: String(d.currency ?? d.Currency ?? "XOF"),
+    balance:
+      balanceOverride ??
+      Number(d.balance ?? d.Balance ?? 0),
+    baseUrl: String(d.baseUrl ?? d.BaseUrl ?? ""),
+    webhookUrl: (d.webhookUrl ?? d.WebhookUrl) as string | undefined,
+    contactEmail:
+      ((d.contactEmail ?? d.ContactEmail) as string | null | undefined) ??
+      undefined,
+    contactPhone:
+      ((d.contactPhone ?? d.ContactPhone) as string | null | undefined) ??
+      undefined,
+    lowBalanceThresholdPercent: (() => {
+      const v = d.lowBalanceThresholdPercent ?? d.LowBalanceThresholdPercent;
+      return v == null ? null : Number(v);
+    })(),
+    lowBalanceReferenceAmount: (() => {
+      const v = d.lowBalanceReferenceAmount ?? d.LowBalanceReferenceAmount;
+      return v == null ? null : Number(v);
+    })(),
+    alertChannels: (() => {
+      const v = d.alertChannels ?? d.AlertChannels;
+      return v == null ? null : Number(v);
+    })(),
+    createdAt: String(d.createdAt ?? d.CreatedAt ?? ""),
+    updatedAt: (d.updatedAt ?? d.UpdatedAt) as string | undefined,
   };
 }
 
 export function mapPartnerAccount(dto: ApiPartnerAccountDto): PartnerAccount {
+  const d = dto as ApiPartnerAccountDto & Record<string, unknown>;
   return {
-    partnerId: dto.partnerId,
-    accountCode: dto.partnerBankAccount,
-    balance: dto.balance,
-    currency: dto.currency,
+    partnerId: String(d.partnerId ?? d.PartnerId ?? ""),
+    accountCode: String(
+      d.partnerBankAccount ?? d.PartnerBankAccount ?? d.accountCode ?? "",
+    ),
+    balance: Number(d.balance ?? d.Balance ?? 0),
+    currency: String(d.currency ?? d.Currency ?? "XOF"),
     totalDebit: 0,
     totalCredit: 0,
   };
 }
 
 export function mapPartnerBalance(dto: ApiPartnerBalanceDto) {
-  return { balance: dto.balance, currency: dto.currency };
+  const d = dto as ApiPartnerBalanceDto & Record<string, unknown>;
+  return {
+    balance: Number(d.balance ?? d.Balance ?? 0),
+    currency: String(d.currency ?? d.Currency ?? "XOF"),
+  };
 }
 
 export function mapCustomer(dto: ApiCustomerDto): Customer {
@@ -275,38 +304,50 @@ export function mapSubscription(dto: ApiSubscriptionDto): Subscription {
 }
 
 export function mapAccountingLine(dto: ApiAccountingLineDto, schemaId: string): AccountingLine {
+  const d = dto as ApiAccountingLineDto & Record<string, unknown>;
   return {
-    id: dto.lineId,
+    id: String(d.lineId ?? d.LineId ?? ""),
     schemaId,
-    lineOrder: dto.lineOrder,
-    accountType: dto.accountType,
-    accountCode: dto.accountCode,
-    accountExpression: dto.accountExpression ?? undefined,
-    side: dto.side,
-    amountFormula: dto.amountFormula,
-    label: dto.label,
-    code: dto.code ?? undefined,
-    exploitant: dto.exploitant ?? undefined,
-    isFee: dto.isFee,
-    isConditional: dto.isConditional,
-    condition: dto.condition ?? undefined,
+    lineOrder: Number(d.lineOrder ?? d.LineOrder ?? 0),
+    accountType: Number(d.accountType ?? d.AccountType ?? 0),
+    accountCode: String(d.accountCode ?? d.AccountCode ?? ""),
+    accountExpression:
+      ((d.accountExpression ?? d.AccountExpression) as string | null | undefined) ??
+      undefined,
+    side: Number(d.side ?? d.Side ?? 0),
+    amountFormula: String(d.amountFormula ?? d.AmountFormula ?? ""),
+    label: String(d.label ?? d.Label ?? ""),
+    code: ((d.code ?? d.Code) as string | null | undefined) ?? undefined,
+    exploitant:
+      ((d.exploitant ?? d.Exploitant) as string | null | undefined) ?? undefined,
+    isFee: Boolean(d.isFee ?? d.IsFee ?? false),
+    isConditional: Boolean(d.isConditional ?? d.IsConditional ?? false),
+    condition:
+      ((d.condition ?? d.Condition) as string | null | undefined) ?? undefined,
   };
 }
 
 export function mapAccountingSchema(dto: ApiAccountingSchemaDto): AccountingSchema {
+  const d = dto as ApiAccountingSchemaDto & Record<string, unknown>;
+  const schemaId = String(d.schemaId ?? d.SchemaId ?? "");
+  const linesRaw = (d.lines ?? d.Lines ?? []) as ApiAccountingLineDto[];
   return {
-    id: dto.schemaId,
-    name: dto.name,
-    code: dto.name,
-    transactionType: dto.transactionType,
-    channel: dto.channel,
-    isActive: dto.isActive,
-    description: dto.description ?? undefined,
-    lines: dto.lines.map((l) => mapAccountingLine(l, dto.schemaId)),
-    createdAt: dto.schemaId,
-    priority: dto.priority,
-    transactionSide: dto.transactionSide,
-    partnerId: dto.partnerId ?? undefined,
+    id: schemaId,
+    name: String(d.name ?? d.Name ?? ""),
+    code: String(d.name ?? d.Name ?? ""),
+    transactionType: Number(d.transactionType ?? d.TransactionType ?? 0),
+    channel: Number(d.channel ?? d.Channel ?? 0),
+    isActive: Boolean(d.isActive ?? d.IsActive ?? true),
+    description:
+      ((d.description ?? d.Description) as string | null | undefined) ?? undefined,
+    lines: (Array.isArray(linesRaw) ? linesRaw : []).map((l) =>
+      mapAccountingLine(l, schemaId),
+    ),
+    createdAt: schemaId,
+    priority: Number(d.priority ?? d.Priority ?? 0),
+    transactionSide: Number(d.transactionSide ?? d.TransactionSide ?? 0),
+    partnerId:
+      ((d.partnerId ?? d.PartnerId) as string | null | undefined) ?? undefined,
   };
 }
 
@@ -424,25 +465,86 @@ export function toCreatePartnerBody(values: {
   baseUrl?: string;
   accountCode?: string;
   currency?: string;
+  webhookUrl?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  lowBalanceThresholdPercent?: number | null;
+  lowBalanceReferenceAmount?: number | null;
+  alertChannels?: number | null;
 }) {
+  const account = values.accountCode?.trim() || null;
   return {
     partnerCode: values.code,
     name: values.name,
-    baseUrl: values.baseUrl || defaultApiBase,
-    currency: values.currency ?? "XOF",
-    accountCode: values.accountCode || undefined,
-    rateLimitPerMin: 100,
-    requireHmac: false,
+    baseUrl: values.baseUrl?.trim() || defaultApiBase,
+    currency: (values.currency ?? "XOF").toUpperCase(),
+    partnerBankAccount: account,
+    accountCode: account,
+    webhookUrl: values.webhookUrl?.trim() || null,
+    ipWhitelist: null,
+    contactEmail: values.contactEmail?.trim() || null,
+    contactPhone: values.contactPhone?.trim() || null,
+    lowBalanceThresholdPercent: values.lowBalanceThresholdPercent ?? null,
+    lowBalanceReferenceAmount: values.lowBalanceReferenceAmount ?? null,
+    alertChannels: values.alertChannels ?? null,
   };
 }
 
+/**
+ * Payload PUT /api/v1/partners/{id} (UpdatePartnerRequest — champs partiels).
+ */
 export function toUpdatePartnerBody(patch: Record<string, unknown>) {
   const body: Record<string, unknown> = {};
   if (patch.name !== undefined) body.name = patch.name;
-  if (patch.baseUrl !== undefined) body.baseUrl = patch.baseUrl;
-  if (patch.accountCode !== undefined) body.accountCode = patch.accountCode;
-  if (patch.currency !== undefined) body.currency = patch.currency;
-  if (patch.webhookUrl !== undefined) body.webhookUrl = patch.webhookUrl;
+  if (patch.baseUrl !== undefined) {
+    const url =
+      typeof patch.baseUrl === "string" ? patch.baseUrl.trim() : patch.baseUrl;
+    body.baseUrl = url || null;
+  }
+  if (patch.accountCode !== undefined) {
+    const code =
+      typeof patch.accountCode === "string"
+        ? patch.accountCode.trim()
+        : patch.accountCode;
+    body.accountCode = code || null;
+    body.partnerBankAccount = code || null;
+  }
+  if (patch.webhookUrl !== undefined) {
+    const url =
+      typeof patch.webhookUrl === "string"
+        ? patch.webhookUrl.trim()
+        : patch.webhookUrl;
+    body.webhookUrl = url || null;
+  }
+  if (patch.currency !== undefined) {
+    body.currency =
+      typeof patch.currency === "string"
+        ? patch.currency.trim().toUpperCase()
+        : patch.currency;
+  }
+  if (patch.contactEmail !== undefined) {
+    const email =
+      typeof patch.contactEmail === "string"
+        ? patch.contactEmail.trim()
+        : patch.contactEmail;
+    body.contactEmail = email || null;
+  }
+  if (patch.contactPhone !== undefined) {
+    const phone =
+      typeof patch.contactPhone === "string"
+        ? patch.contactPhone.trim()
+        : patch.contactPhone;
+    body.contactPhone = phone || null;
+  }
+  if (patch.lowBalanceThresholdPercent !== undefined) {
+    body.lowBalanceThresholdPercent = patch.lowBalanceThresholdPercent;
+  }
+  if (patch.lowBalanceReferenceAmount !== undefined) {
+    body.lowBalanceReferenceAmount = patch.lowBalanceReferenceAmount;
+  }
+  if (patch.alertChannels !== undefined) {
+    body.alertChannels = patch.alertChannels;
+  }
   return body;
 }
 
@@ -508,17 +610,37 @@ export interface ApiPartnerEndpointDto {
 }
 
 export function mapPartnerEndpoint(dto: ApiPartnerEndpointDto): PartnerEndpoint {
-  const id = dto.partnerEndpointId ?? dto.endpointId ?? dto.id ?? "";
-  const schemaId = dto.accountingSchemaId ?? dto.schemaId ?? undefined;
+  if (!dto) {
+    throw new Error("Réponse partner-endpoint invalide (DTO manquant).");
+  }
+  const d = dto as ApiPartnerEndpointDto & Record<string, unknown>;
+  const id = String(
+    d.partnerEndpointId ?? d.PartnerEndpointId ?? d.endpointId ?? d.id ?? "",
+  );
+  const schemaId = (d.accountingSchemaId ??
+    d.AccountingSchemaId ??
+    d.schemaId ??
+    d.SchemaId) as string | null | undefined;
   return {
     id,
-    partnerId: dto.partnerId,
-    endpointKey: dto.endpointKey,
+    partnerId: String(d.partnerId ?? d.PartnerId ?? ""),
+    endpointKey: Number(d.endpointKey ?? d.EndpointKey ?? 0),
     schemaId: schemaId ?? undefined,
-    schemaName: dto.accountingSchemaName ?? dto.schemaName ?? undefined,
-    schemaCode: dto.accountingSchemaCode ?? dto.schemaCode ?? undefined,
-    createdAt: dto.createdAt ?? new Date().toISOString(),
-    updatedAt: dto.updatedAt ?? undefined,
+    schemaName:
+      ((d.accountingSchemaName ??
+        d.AccountingSchemaName ??
+        d.schemaName ??
+        d.SchemaName) as string | null | undefined) ?? undefined,
+    schemaCode:
+      ((d.accountingSchemaCode ??
+        d.AccountingSchemaCode ??
+        d.schemaCode ??
+        d.SchemaCode) as string | null | undefined) ?? undefined,
+    createdAt: String(
+      d.createdAt ?? d.CreatedAt ?? new Date().toISOString(),
+    ),
+    updatedAt:
+      ((d.updatedAt ?? d.UpdatedAt) as string | null | undefined) ?? undefined,
   };
 }
 
@@ -544,3 +666,112 @@ export function toCreateSubscriptionBody(values: {
     expiresAt: expires,
   };
 }
+
+/** Payload POST /api/v1/accounting/schemas (CreateAccountingSchemaRequest). */
+export function toCreateAccountingSchemaBody(values: {
+  name?: string;
+  partnerId?: string | null;
+  transactionType?: number;
+  transactionSide?: number;
+  channel?: number;
+  priority?: number;
+  description?: string | null;
+  lines?: Array<{
+    lineOrder: number;
+    accountCode?: string;
+    accountType: number;
+    accountExpression?: string;
+    side: number;
+    amountFormula: string;
+    label?: string;
+    code?: string;
+    exploitant?: string;
+    isFee?: boolean;
+    isConditional?: boolean;
+    condition?: string;
+  }>;
+}) {
+  const txType = values.transactionType ?? 0;
+  const sideFromType =
+    txType === 1 || txType === 3 ? 1 : 0; // Credit types → Credit, sinon Debit
+
+  const mappedLines = (values.lines ?? []).map((l) => ({
+    lineOrder: l.lineOrder,
+    accountCode: l.accountCode ?? "",
+    accountType: l.accountType,
+    accountExpression: l.accountExpression ?? null,
+    side: l.side,
+    amountFormula: l.amountFormula,
+    label: l.label ?? "",
+    code: l.code ?? null,
+    exploitant: l.exploitant ?? null,
+    isFee: l.isFee ?? false,
+    isConditional: l.isConditional ?? false,
+    condition: l.condition ?? null,
+  }));
+
+  // Ligne initiale minimale : le détail du schéma permet de la modifier / en ajouter.
+  // Évite l'échec si le back exige encore Lines.NotEmpty.
+  const lines =
+    mappedLines.length > 0
+      ? mappedLines
+      : [
+          {
+            lineOrder: 1,
+            accountCode: "000000",
+            accountType: 0,
+            accountExpression: null,
+            side: sideFromType,
+            amountFormula: "AMOUNT",
+            label: "À configurer",
+            code: null,
+            exploitant: null,
+            isFee: false,
+            isConditional: false,
+            condition: null,
+          },
+        ];
+
+  return {
+    name: values.name?.trim() ?? "",
+    partnerId: values.partnerId || null,
+    transactionType: txType,
+    transactionSide: values.transactionSide ?? sideFromType,
+    channel: values.channel ?? 0,
+    priority: values.priority ?? 0,
+    description: values.description?.trim() || null,
+    lines,
+  };
+}
+
+/** Payload POST/PUT ligne de schéma comptable. */
+export function toSchemaLineBody(values: {
+  lineOrder?: number;
+  accountCode?: string;
+  accountType?: number;
+  accountExpression?: string;
+  side?: number;
+  amountFormula?: string;
+  label?: string;
+  code?: string;
+  exploitant?: string;
+  isFee?: boolean;
+  isConditional?: boolean;
+  condition?: string;
+}) {
+  return {
+    lineOrder: values.lineOrder ?? 1,
+    accountCode: values.accountCode?.trim() ?? "",
+    accountType: values.accountType ?? 0,
+    accountExpression: values.accountExpression?.trim() || null,
+    side: values.side ?? 0,
+    amountFormula: values.amountFormula?.trim() ?? "AMOUNT",
+    label: values.label?.trim() || "Ligne",
+    code: values.code?.trim() || null,
+    exploitant: values.exploitant?.trim() || null,
+    isFee: values.isFee ?? false,
+    isConditional: values.isConditional ?? false,
+    condition: values.condition?.trim() || null,
+  };
+}
+

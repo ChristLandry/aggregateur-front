@@ -70,7 +70,7 @@ export function PartnerSelector() {
                   onSelect={() => {
                     clearPartner();
                     setOpen(false);
-                    qc.invalidateQueries({ queryKey: ["customers"] });
+                    qc.invalidateQueries({ queryKey: ["clients"] });
                     qc.invalidateQueries({ queryKey: ["subscriptions"] });
                     qc.invalidateQueries({ queryKey: ["dashboard"] });
                   }}
@@ -97,7 +97,7 @@ export function PartnerSelector() {
                           if (!hasKey || !p.id) return;
                           selectPartner(p.id);
                           setOpen(false);
-                          qc.invalidateQueries({ queryKey: ["customers"] });
+                          qc.invalidateQueries({ queryKey: ["clients"] });
                           qc.invalidateQueries({ queryKey: ["subscriptions"] });
                           qc.invalidateQueries({ queryKey: ["dashboard"] });
                         }}

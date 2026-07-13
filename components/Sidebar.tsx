@@ -43,7 +43,7 @@ const NAV: NavSection[] = [
     label: "Domaine",
     items: [
       { href: "/partners", label: "Partenaires", icon: Building2 },
-      { href: "/customers", label: "Clients", icon: Users },
+      { href: "/clients", label: "Clients", icon: Users },
       { href: "/subscriptions", label: "Souscriptions", icon: CreditCard },
     ],
   },

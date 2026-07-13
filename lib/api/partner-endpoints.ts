@@ -57,9 +57,10 @@ export function useCreatePartnerEndpoint() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (body: CreatePartnerEndpointInput) => {
-      const dto = await apiPost<ApiPartnerEndpointDto>(
-        "/api/v1/partner-endpoints",
-        body,
+      // POST renvoie Guid, pas le DTO complet
+      const id = await apiPost<string>("/api/v1/partner-endpoints", body);
+      const dto = await apiGet<ApiPartnerEndpointDto>(
+        `/api/v1/partner-endpoints/${id}`,
       );
       return mapPartnerEndpoint(dto);
     },
@@ -93,9 +94,12 @@ export function useAttachSchema() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, schemaId }: AttachSchemaInput) => {
-      const dto = await apiPut<ApiPartnerEndpointDto>(
-        `/api/v1/partner-endpoints/${id}/schema`,
-        { schemaId },
+      // PUT .../schema renvoie ApiResponse sans data — recharger le détail
+      await apiPut<void>(`/api/v1/partner-endpoints/${id}/schema`, {
+        schemaId,
+      });
+      const dto = await apiGet<ApiPartnerEndpointDto>(
+        `/api/v1/partner-endpoints/${id}`,
       );
       return mapPartnerEndpoint(dto);
     },

@@ -76,9 +76,12 @@ export default function SubscriptionDetailPage() {
             <dl className="grid grid-cols-2 gap-y-3 text-sm">
               <dt className="text-muted-foreground">Statut</dt>
               <dd><SubscriptionStatusBadge status={data.status} /></dd>
-              <dt className="text-muted-foreground">Client</dt>
+              <dt className="text-muted-foreground">CustomerId</dt>
               <dd>
-                <Link className="hover:underline" href={`/customers/${data.customerId}`}>
+                <Link
+                  className="hover:underline"
+                  href={`/subscriptions?customerId=${data.customerId}`}
+                >
                   <span className="font-mono text-xs">{data.customerId}</span>
                 </Link>
               </dd>

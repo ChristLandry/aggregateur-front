@@ -41,7 +41,27 @@ export function usePartners() {
     queryKey: partnersKeys.list(),
     queryFn: async () => {
       const rows = await apiGet<ApiPartnerDto[]>("/api/v1/partners");
-      return rows.map(mapPartner);
+      const partners = (Array.isArray(rows) ? rows : []).map((r) => mapPartner(r));
+
+      // PartnerDto n'embarque pas le solde → GET /partners/{id}/balance
+      return Promise.all(
+        partners.map(async (p) => {
+          if (!p.id) return p;
+          try {
+            const bal = await apiGet<ApiPartnerBalanceDto>(
+              `/api/v1/partners/${p.id}/balance`,
+            );
+            const mapped = mapPartnerBalance(bal);
+            return {
+              ...p,
+              balance: mapped.balance,
+              currency: mapped.currency || p.currency,
+            };
+          } catch {
+            return p;
+          }
+        }),
+      );
     },
     meta: { errorFallback: "Impossible de charger les partenaires" },
   });
@@ -52,7 +72,20 @@ export function usePartner(id: string | undefined) {
     queryKey: partnersKeys.detail(id ?? ""),
     queryFn: async () => {
       const dto = await apiGet<ApiPartnerDto>(`/api/v1/partners/${id}`);
-      return mapPartner(dto);
+      const partner = mapPartner(dto);
+      try {
+        const bal = await apiGet<ApiPartnerBalanceDto>(
+          `/api/v1/partners/${id}/balance`,
+        );
+        const mapped = mapPartnerBalance(bal);
+        return {
+          ...partner,
+          balance: mapped.balance,
+          currency: mapped.currency || partner.currency,
+        };
+      } catch {
+        return partner;
+      }
     },
     enabled: !!id,
     meta: { errorFallback: "Impossible de charger le partenaire" },
@@ -105,8 +138,11 @@ export function useCreatePartner() {
         accountCode: body.accountCode,
         status: 1,
         currency: body.currency ?? "XOF",
-        rateLimitPerMin: 100,
-        requireHmac: false,
+        contactEmail: body.contactEmail,
+        contactPhone: body.contactPhone,
+        lowBalanceThresholdPercent: body.lowBalanceThresholdPercent ?? null,
+        lowBalanceReferenceAmount: body.lowBalanceReferenceAmount ?? null,
+        alertChannels: body.alertChannels ?? null,
         createdAt: new Date().toISOString(),
       });
       if (apiKey && partner.id) {
@@ -194,6 +230,7 @@ export function useSetPartnerBalance(id: string) {
       qc.invalidateQueries({ queryKey: partnersKeys.balance(id) });
       qc.invalidateQueries({ queryKey: partnersKeys.account(id) });
       qc.invalidateQueries({ queryKey: partnersKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: partnersKeys.list() });
       notifySuccess("Solde mis à jour");
     },
     onError: (e) => notifyError(e, "Mise à jour du solde impossible"),

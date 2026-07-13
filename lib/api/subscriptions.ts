@@ -5,13 +5,15 @@ import { apiGet, apiPost, apiPatch, ApiError } from "./client";
 import { notifyError, notifySuccess } from "./notify";
 import type { Subscription } from "./types";
 import {
+  mapPartner,
   mapSubscription,
   toCreateSubscriptionBody,
+  type ApiPartnerDto,
   type ApiSubscriptionDto,
 } from "./mappers";
-import { hasPartnerApiContext } from "@/lib/partner/context";
 import { getWebPartnerApiKey } from "@/lib/partner/api-key";
 import { usePartnerStore } from "@/lib/partner/store";
+import { WEB_PARTNER_CODE } from "@/lib/partner/constants";
 import type { SubscriptionFormValues } from "@/lib/schemas/subscription";
 import { SubscriptionStatus, SubscriptionStatusLabel } from "@/lib/enums";
 import {
@@ -76,7 +78,9 @@ export function resolveApiKeyForPartnerScope(
   if (isWebPartnerScope(partnerScope)) {
     return getWebPartnerApiKey();
   }
-  return usePartnerStore.getState().getApiKey(partnerScope!);
+  return (
+    usePartnerStore.getState().getApiKey(partnerScope!) ?? getWebPartnerApiKey()
+  );
 }
 
 export function buildSubscriptionsUrl(
@@ -138,26 +142,60 @@ export async function listSubscriptions(
         ]
       : [status];
 
+  async function collectForScope(partnerScope: string): Promise<Subscription[]> {
+    const seen = new Set<string>();
+    const rows: Subscription[] = [];
+    for (const s of statusesToFetch) {
+      const dtos = await fetchSubscriptionRows(
+        { ...apiFilters, partnerScope, take: maxTake },
+        s,
+        apiKey!,
+      );
+      for (const dto of dtos) {
+        const sub = mapSubscription(dto);
+        if (!sub.id || seen.has(sub.id)) continue;
+        seen.add(sub.id);
+        rows.push(sub);
+      }
+    }
+    return rows;
+  }
+
+  // Partenaire métier : une seule requête filtrée.
+  if (!isWeb) {
+    const rows = await collectForScope(normalized.partnerScope!);
+    return maxTake ? rows.slice(0, maxTake) : rows;
+  }
+
+  // Mode WEB :
+  // 1) Appel global (back MAJ : sans partnerId = toutes les souscriptions)
+  const globalRows = await collectForScope(SUBSCRIPTION_PARTNER_WEB);
+  if (globalRows.length > 0) {
+    return maxTake ? globalRows.slice(0, maxTake) : globalRows;
+  }
+
+  // 2) Fallback : fan-out sur chaque partenaire métier (compat back ancien)
+  const partnerDtos = await apiGet<ApiPartnerDto[]>("/api/v1/partners");
+  const partnerIds = (Array.isArray(partnerDtos) ? partnerDtos : [])
+    .map(mapPartner)
+    .filter(
+      (p) => !!p.id && p.code?.toUpperCase() !== WEB_PARTNER_CODE,
+    )
+    .map((p) => p.id);
+
+  if (partnerIds.length === 0) return globalRows;
+
   const seen = new Set<string>();
   const merged: Subscription[] = [];
-
-  for (const s of statusesToFetch) {
-    const rows = await fetchSubscriptionRows(
-      { ...apiFilters, take: maxTake },
-      s,
-      apiKey,
-    );
-    for (const dto of rows) {
-      const sub = mapSubscription(dto);
+  for (const partnerId of partnerIds) {
+    const rows = await collectForScope(partnerId);
+    for (const sub of rows) {
       if (!sub.id || seen.has(sub.id)) continue;
       seen.add(sub.id);
       merged.push(sub);
-      if (isWeb && maxTake && merged.length >= maxTake) {
+      if (maxTake && merged.length >= maxTake) {
         return merged.slice(0, maxTake);
       }
-    }
-    if (isWeb && maxTake && merged.length >= maxTake) {
-      return merged.slice(0, maxTake);
     }
   }
 

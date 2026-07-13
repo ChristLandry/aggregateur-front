@@ -51,6 +51,14 @@ export enum PartnerStatus {
   Suspended = 2,
 }
 
+/** Flags canaux d'alerte solde bas (Email=1, Sms=2, Email+Sms=3). */
+export enum AlertChannels {
+  None = 0,
+  Email = 1,
+  Sms = 2,
+  EmailAndSms = 3,
+}
+
 export enum SubscriptionStatus {
   Inactive = 0,
   Active = 1,
@@ -118,6 +126,34 @@ export const PartnerStatusLabel: Record<PartnerStatus, string> = {
   [PartnerStatus.Active]: "Actif",
   [PartnerStatus.Suspended]: "Suspendu",
 };
+
+export const AlertChannelsLabel: Record<AlertChannels, string> = {
+  [AlertChannels.None]: "Aucun",
+  [AlertChannels.Email]: "Email",
+  [AlertChannels.Sms]: "SMS",
+  [AlertChannels.EmailAndSms]: "Email + SMS",
+};
+
+export function encodeAlertChannels(email: boolean, sms: boolean): AlertChannels {
+  return ((email ? AlertChannels.Email : 0) |
+    (sms ? AlertChannels.Sms : 0)) as AlertChannels;
+}
+
+export function decodeAlertChannels(flags: number | null | undefined): {
+  email: boolean;
+  sms: boolean;
+} {
+  const n = flags ?? AlertChannels.None;
+  return {
+    email: (n & AlertChannels.Email) !== 0,
+    sms: (n & AlertChannels.Sms) !== 0,
+  };
+}
+
+export function alertChannelsLabel(flags: number | null | undefined): string {
+  const n = (flags ?? AlertChannels.None) as AlertChannels;
+  return AlertChannelsLabel[n] ?? String(flags);
+}
 
 export const CustomerStatusLabel: Record<CustomerStatus, string> = {
   [CustomerStatus.Inactive]: "Inactif",

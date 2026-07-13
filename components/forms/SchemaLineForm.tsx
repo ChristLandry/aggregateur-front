@@ -1,8 +1,10 @@
 "use client";
 
+import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,12 +26,26 @@ import {
 } from "@/components/ui/select";
 import { accountingLineSchema, type AccountingLineFormValues } from "@/lib/schemas/accounting";
 import { AccountType, LedgerSide } from "@/lib/enums";
+import { ApiError } from "@/lib/api/client";
+import type { AccountingLine } from "@/lib/api/types";
+import {
+  findLineOrderConflict,
+  lineOrderConflictMessage,
+  nextFreeLineOrder,
+} from "@/lib/accounting/line-order";
 
 interface SchemaLineFormProps {
   onSubmit: (values: AccountingLineFormValues) => Promise<void> | void;
   onCancel?: () => void;
   loading?: boolean;
+  /** Prefill création : prochain ordre libre. */
   initialOrder?: number;
+  initial?: Partial<AccountingLineFormValues>;
+  submitLabel?: string;
+  /** Lignes déjà présentes (validation unicité LineOrder). */
+  existingLines?: Pick<AccountingLine, "id" | "lineOrder" | "label">[];
+  /** En édition : autoriser de garder son propre ordre. */
+  excludeLineId?: string | null;
 }
 
 export function SchemaLineForm({
@@ -37,31 +53,84 @@ export function SchemaLineForm({
   onCancel,
   loading,
   initialOrder = 1,
+  initial,
+  submitLabel = "Ajouter la ligne",
+  existingLines = [],
+  excludeLineId,
 }: SchemaLineFormProps) {
+  const lineOrderInputRef = React.useRef<HTMLInputElement | null>(null);
+
   const form = useForm<AccountingLineFormValues>({
     resolver: zodResolver(accountingLineSchema),
     defaultValues: {
-      lineOrder: initialOrder,
-      accountType: AccountType.Fixed,
-      accountCode: "",
-      accountExpression: "",
-      side: LedgerSide.Debit,
-      amountFormula: "AMOUNT",
-      label: "",
-      code: "",
-      exploitant: "",
-      isFee: false,
-      isConditional: false,
-      condition: "",
+      lineOrder: initial?.lineOrder ?? initialOrder,
+      accountType: initial?.accountType ?? AccountType.Fixed,
+      accountCode: initial?.accountCode ?? "",
+      accountExpression: initial?.accountExpression ?? "",
+      side: initial?.side ?? LedgerSide.Debit,
+      amountFormula: initial?.amountFormula ?? "AMOUNT",
+      label: initial?.label ?? "",
+      code: initial?.code ?? "",
+      exploitant: initial?.exploitant ?? "",
+      isFee: initial?.isFee ?? false,
+      isConditional: initial?.isConditional ?? false,
+      condition: initial?.condition ?? "",
     },
   });
 
   const accountType = form.watch("accountType");
   const isConditional = form.watch("isConditional");
+  const watchedOrder = Number(form.watch("lineOrder"));
+
+  const conflict = React.useMemo(
+    () =>
+      Number.isFinite(watchedOrder) && watchedOrder >= 1
+        ? findLineOrderConflict(existingLines, watchedOrder, excludeLineId)
+        : undefined,
+    [existingLines, watchedOrder, excludeLineId],
+  );
+
+  const conflictMessage = conflict
+    ? lineOrderConflictMessage(watchedOrder, conflict.label)
+    : null;
+
+  async function handleSubmit(values: AccountingLineFormValues) {
+    const localConflict = findLineOrderConflict(
+      existingLines,
+      values.lineOrder,
+      excludeLineId,
+    );
+    if (localConflict) {
+      const msg = lineOrderConflictMessage(values.lineOrder, localConflict.label);
+      form.setError("lineOrder", { type: "manual", message: msg });
+      lineOrderInputRef.current?.focus();
+      return;
+    }
+
+    try {
+      await onSubmit(values);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === "LINE_ORDER_DUPLICATE") {
+        const suggested = nextFreeLineOrder(existingLines);
+        const msg =
+          e.message ||
+          lineOrderConflictMessage(values.lineOrder, undefined);
+        toast.error(msg);
+        form.setError("lineOrder", {
+          type: "server",
+          message: `${msg} Prochain ordre libre : ${suggested}.`,
+        });
+        form.setValue("lineOrder", suggested, { shouldValidate: true });
+        requestAnimationFrame(() => lineOrderInputRef.current?.focus());
+        return;
+      }
+      throw e;
+    }
+  }
 
   return (
     <Form {...form}>
-      <form className="space-y-4" onSubmit={form.handleSubmit(async (v) => onSubmit(v))}>
+      <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
         <div className="grid gap-4 sm:grid-cols-3">
           <FormField
             control={form.control}
@@ -69,8 +138,34 @@ export function SchemaLineForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Ordre</FormLabel>
-                <FormControl><Input type="number" min={1} {...field} /></FormControl>
-                <FormMessage />
+                <FormControl>
+                  <Input
+                    type="number"
+                    min={1}
+                    {...field}
+                    ref={(el) => {
+                      field.ref(el);
+                      lineOrderInputRef.current = el;
+                    }}
+                    onChange={(e) => {
+                      field.onChange(e);
+                      form.clearErrors("lineOrder");
+                    }}
+                  />
+                </FormControl>
+                {conflictMessage ? (
+                  <p className="text-sm font-medium text-destructive">
+                    {conflictMessage}
+                  </p>
+                ) : (
+                  <FormMessage />
+                )}
+                <FormDescription>
+                  Doit être unique dans le schéma. Prochain libre :{" "}
+                  {nextFreeLineOrder(
+                    existingLines.filter((l) => l.id !== excludeLineId),
+                  )}
+                </FormDescription>
               </FormItem>
             )}
           />
@@ -243,9 +338,9 @@ export function SchemaLineForm({
               Annuler
             </Button>
           )}
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || !!conflict}>
             {loading && <Loader2 className="animate-spin" />}
-            Ajouter la ligne
+            {submitLabel}
           </Button>
         </div>
       </form>

@@ -137,6 +137,7 @@ export default function PartnerDetailPage() {
             </CardHeader>
             <CardContent>
               <PartnerForm
+                key={partner.id}
                 initial={partner}
                 loading={update.isPending}
                 onSubmit={async (patch) => {
@@ -144,7 +145,11 @@ export default function PartnerDetailPage() {
                     toast.info("Aucun changement à enregistrer");
                     return;
                   }
-                  await update.mutateAsync(patch);
+                  try {
+                    await update.mutateAsync(patch);
+                  } catch {
+                    /* toast via onError */
+                  }
                 }}
               />
             </CardContent>

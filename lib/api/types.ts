@@ -41,11 +41,15 @@ export interface Partner {
   balance: number;
   baseUrl?: string;
   webhookUrl?: string;
-  rateLimitPerMin?: number;
-  requireHmac?: boolean;
   apiKey?: string;
   contactEmail?: string;
   contactPhone?: string;
+  /** Pourcentage (1–100) déclenchant l'alerte ; null = désactivé. */
+  lowBalanceThresholdPercent?: number | null;
+  /** Montant de référence (100 %) ; null = désactivé. */
+  lowBalanceReferenceAmount?: number | null;
+  /** 0=None, 1=Email, 2=Sms, 3=Email+Sms ; null = désactivé. */
+  alertChannels?: number | null;
   createdAt: string;
   updatedAt?: string;
 }

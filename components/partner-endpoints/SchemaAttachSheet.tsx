@@ -88,8 +88,12 @@ export function SchemaAttachSheet({
             disabled={!endpointId || !schemaId || attach.isPending}
             onClick={async () => {
               if (!endpointId || !schemaId) return;
-              await attach.mutateAsync({ id: endpointId, schemaId });
-              onOpenChange(false);
+              try {
+                await attach.mutateAsync({ id: endpointId, schemaId });
+                onOpenChange(false);
+              } catch {
+                /* toast via onError */
+              }
             }}
           >
             {attach.isPending && <Loader2 className="animate-spin" />}

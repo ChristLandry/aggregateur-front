@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ChevronLeft, FlaskConical, Play, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, FlaskConical, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,7 @@ import {
   useAccountingSchema,
   useUpdateSchema,
   useAddSchemaLine,
+  useUpdateSchemaLine,
   useDeleteSchemaLine,
 } from "@/lib/api/accounting";
 import {
@@ -39,21 +40,25 @@ import {
   TransactionTypeLabel,
 } from "@/lib/enums";
 import { toast } from "sonner";
+import type { AccountingLine } from "@/lib/api/types";
+import { nextFreeLineOrder } from "@/lib/accounting/line-order";
 
 export default function SchemaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading } = useAccountingSchema(id);
   const update = useUpdateSchema(id);
   const addLine = useAddSchemaLine(id);
+  const updateLine = useUpdateSchemaLine(id);
   const delLine = useDeleteSchemaLine(id);
   const [lineOpen, setLineOpen] = React.useState(false);
+  const [editingLine, setEditingLine] = React.useState<AccountingLine | null>(null);
 
   if (isLoading || !data) {
     return <Skeleton className="h-64 w-full" />;
   }
 
   const sortedLines = [...(data.lines ?? [])].sort((a, b) => a.lineOrder - b.lineOrder);
-  const nextOrder = (sortedLines.at(-1)?.lineOrder ?? 0) + 1;
+  const nextOrder = nextFreeLineOrder(sortedLines);
 
   return (
     <div>
@@ -108,18 +113,66 @@ export default function SchemaDetailPage() {
                 <DialogHeader>
                   <DialogTitle>Nouvelle ligne</DialogTitle>
                 </DialogHeader>
-                <SchemaLineForm
-                  initialOrder={nextOrder}
-                  loading={addLine.isPending}
-                  onCancel={() => setLineOpen(false)}
-                  onSubmit={async (v) => {
-                    await addLine.mutateAsync(v);
-                    setLineOpen(false);
-                  }}
-                />
+                {lineOpen && (
+                  <SchemaLineForm
+                    key={`create-${nextOrder}-${sortedLines.length}`}
+                    initialOrder={nextOrder}
+                    existingLines={sortedLines}
+                    loading={addLine.isPending}
+                    onCancel={() => setLineOpen(false)}
+                    onSubmit={async (v) => {
+                      await addLine.mutateAsync(v);
+                      setLineOpen(false);
+                    }}
+                  />
+                )}
               </DialogContent>
             </Dialog>
           </div>
+
+          <Dialog
+            open={!!editingLine}
+            onOpenChange={(open) => {
+              if (!open) setEditingLine(null);
+            }}
+          >
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Modifier la ligne</DialogTitle>
+              </DialogHeader>
+              {editingLine && (
+                <SchemaLineForm
+                  key={editingLine.id}
+                  excludeLineId={editingLine.id}
+                  existingLines={sortedLines}
+                  initial={{
+                    lineOrder: editingLine.lineOrder,
+                    accountType: editingLine.accountType,
+                    accountCode: editingLine.accountCode ?? "",
+                    accountExpression: editingLine.accountExpression ?? "",
+                    side: editingLine.side,
+                    amountFormula: editingLine.amountFormula,
+                    label: editingLine.label ?? "",
+                    code: editingLine.code ?? "",
+                    exploitant: editingLine.exploitant ?? "",
+                    isFee: editingLine.isFee,
+                    isConditional: editingLine.isConditional,
+                    condition: editingLine.condition ?? "",
+                  }}
+                  loading={updateLine.isPending}
+                  submitLabel="Enregistrer"
+                  onCancel={() => setEditingLine(null)}
+                  onSubmit={async (v) => {
+                    await updateLine.mutateAsync({
+                      lineId: editingLine.id,
+                      values: v,
+                    });
+                    setEditingLine(null);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
 
           <Card>
             <CardContent className="p-0">
@@ -144,8 +197,8 @@ export default function SchemaDetailPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sortedLines.map((line) => (
-                      <TableRow key={line.id}>
+                    sortedLines.map((line, idx) => (
+                      <TableRow key={line.id || `line-${idx}`}>
                         <TableCell className="font-mono">{line.lineOrder}</TableCell>
                         <TableCell className="font-mono text-xs">
                           {line.accountType === AccountType.Dynamic
@@ -170,17 +223,35 @@ export default function SchemaDetailPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => {
-                              if (confirm("Supprimer cette ligne ?")) delLine.mutate(line.id);
-                            }}
-                            aria-label="Supprimer"
-                            className="text-destructive"
-                          >
-                            <Trash2 />
-                          </Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setEditingLine(line)}
+                              aria-label="Modifier"
+                              disabled={!line.id}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => {
+                                if (!line.id) {
+                                  toast.error("Identifiant de ligne manquant.");
+                                  return;
+                                }
+                                if (confirm("Supprimer cette ligne ?")) {
+                                  delLine.mutate(line.id);
+                                }
+                              }}
+                              aria-label="Supprimer"
+                              className="text-destructive"
+                              disabled={!line.id || delLine.isPending}
+                            >
+                              <Trash2 />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -203,7 +274,11 @@ export default function SchemaDetailPage() {
                     toast.info("Aucun changement à enregistrer");
                     return;
                   }
-                  await update.mutateAsync(patch);
+                  try {
+                    await update.mutateAsync(patch);
+                  } catch {
+                    /* toast via onError */
+                  }
                 }}
               />
             </CardContent>

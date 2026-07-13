@@ -129,9 +129,13 @@ export default function SchemasPage() {
                   loading={create.isPending}
                   onCancel={() => setOpen(false)}
                   onSubmit={async (v) => {
-                    const created = await create.mutateAsync(v);
-                    setOpen(false);
-                    if (created?.id) router.push(`/accounting/schemas/${created.id}`);
+                    try {
+                      const created = await create.mutateAsync(v);
+                      setOpen(false);
+                      if (created?.id) router.push(`/accounting/schemas/${created.id}`);
+                    } catch {
+                      /* toast via onError */
+                    }
                   }}
                   submitLabel="Créer"
                 />

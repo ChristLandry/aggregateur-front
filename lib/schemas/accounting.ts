@@ -9,7 +9,7 @@ export const accountingLineSchema = z
     accountExpression: z.string().optional(),
     side: z.nativeEnum(LedgerSide),
     amountFormula: z.string().min(1, "Formule requise"),
-    label: z.string().optional(),
+    label: z.string().min(1, "Libellé requis"),
     code: z.string().optional(),
     exploitant: z.string().optional(),
     isFee: z.boolean().default(false),
