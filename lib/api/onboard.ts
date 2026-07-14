@@ -5,6 +5,7 @@ import { apiPost, ApiError } from "./client";
 import { getWebPartnerApiKey } from "@/lib/partner/api-key";
 import { usePartnerStore } from "@/lib/partner/store";
 import type { OnboardFormValues } from "@/lib/schemas/onboard";
+import { normalizeOnboardPhone } from "@/lib/schemas/onboard";
 import { subscriptionsKeys } from "./subscriptions";
 import { clientsKeys } from "./clients";
 
@@ -46,7 +47,7 @@ function mapOnboardResponse(dto: ApiOnboardDto): OnboardCustomerResponse {
 export function toOnboardBody(values: OnboardFormValues) {
   return {
     bankAccount: values.bankAccount.trim(),
-    phoneNumber: values.phoneNumber.trim(),
+    phoneNumber: normalizeOnboardPhone(values.phoneNumber),
     bankAccountRoot: values.bankAccountRoot.trim(),
     walletTemporalyCode: values.walletTemporalyCode.trim(),
     partnerId: values.partnerId,
@@ -75,30 +76,74 @@ export function useOnboardCustomer() {
       }
 
       const body = toOnboardBody(values);
-      const dto = await apiPost<ApiOnboardDto>(
-        "/api/v1/subscriptions/onboard",
-        body,
-        {
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-            "X-Partner-ApiKey": apiKey,
+      try {
+        const dto = await apiPost<ApiOnboardDto>(
+          "/api/v1/subscriptions/onboard",
+          body,
+          {
+            headers: {
+              Accept: "application/json",
+              "Content-Type": "application/json",
+              "X-Partner-ApiKey": apiKey,
+            },
+            // KYC Wave + liaison peuvent dépasser 60 s.
+            timeout: 120_000,
           },
-          timeout: 60_000,
-        },
-      );
-      const mapped = mapOnboardResponse(dto);
-      if (!mapped.subscriptionId) {
-        throw new ApiError(
-          "Réponse onboard invalide (subscriptionId manquant).",
-          "ONBOARD_INVALID_RESPONSE",
         );
+        const mapped = mapOnboardResponse(dto);
+        if (!mapped.subscriptionId) {
+          throw new ApiError(
+            "Réponse onboard invalide (subscriptionId manquant).",
+            "ONBOARD_INVALID_RESPONSE",
+          );
+        }
+        return mapped;
+      } catch (err) {
+        // L'API a souvent déjà persisté alors que le proxy/navigateur a perdu la réponse.
+        if (
+          err instanceof ApiError &&
+          (err.code === "NETWORK_ERROR" ||
+            err.code === "TIMEOUT" ||
+            err.code === "BACKEND_UNAVAILABLE")
+        ) {
+          const recovered = await recoverOnboardAfterTransportError(values);
+          if (recovered) return recovered;
+        }
+        throw err;
       }
-      return mapped;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: subscriptionsKeys.all });
       qc.invalidateQueries({ queryKey: clientsKeys.all });
     },
   });
+}
+
+/**
+ * Si le transport échoue après un onboard réussi côté API, on retrouve
+ * la souscription fraîchement créée (évite un faux NETWORK_ERROR).
+ */
+async function recoverOnboardAfterTransportError(
+  values: OnboardFormValues,
+): Promise<OnboardCustomerResponse | null> {
+  try {
+    const { listSubscriptions } = await import("./subscriptions");
+    const rows = await listSubscriptions({
+      partnerScope: "web",
+      bankAccountNumber: values.bankAccount.trim(),
+      phoneNumber: normalizeOnboardPhone(values.phoneNumber),
+      take: 20,
+    });
+    const match = rows.find((r) => r.partnerId === values.partnerId) ?? rows[0];
+    if (!match?.id) return null;
+    return {
+      clientId: "",
+      customerId: match.customerId,
+      subscriptionId: match.id,
+      linkId: null,
+      status: "SUCCESS",
+    };
+  } catch {
+    return null;
+  }
 }

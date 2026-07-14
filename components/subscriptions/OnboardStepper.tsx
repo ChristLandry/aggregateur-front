@@ -66,7 +66,7 @@ export function OnboardStepper({ current, states }: OnboardStepperProps) {
               </span>
               {state === "active" && (
                 <span className="text-xs text-muted-foreground">
-                  En cours… (jusqu&apos;à ~10 s)
+                  En cours… (jusqu&apos;à ~2 min)
                 </span>
               )}
             </div>

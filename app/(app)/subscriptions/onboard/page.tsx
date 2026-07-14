@@ -64,17 +64,18 @@ export default function SubscriptionOnboardPage() {
     clearTimers();
     setStepStates({ kyc: "active", link: "pending", persist: "pending" });
     setCurrentStep("kyc");
+    // Animation indicative seulement — le vrai résultat vient de l'API (souvent 10–60 s).
     timersRef.current.push(
       window.setTimeout(() => {
         setStepStates({ kyc: "done", link: "active", persist: "pending" });
         setCurrentStep("link");
-      }, 2800),
+      }, 8000),
     );
     timersRef.current.push(
       window.setTimeout(() => {
         setStepStates({ kyc: "done", link: "done", persist: "active" });
         setCurrentStep("persist");
-      }, 5500),
+      }, 20000),
     );
   }
 
@@ -250,9 +251,11 @@ export default function SubscriptionOnboardPage() {
                   Voir la souscription
                 </Link>
               </Button>
-              <Button asChild variant="secondary">
-                <Link href={`/clients/${result.clientId}`}>Voir le client</Link>
-              </Button>
+              {result.clientId ? (
+                <Button asChild variant="secondary">
+                  <Link href={`/clients/${result.clientId}`}>Voir le client</Link>
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 onClick={() => {

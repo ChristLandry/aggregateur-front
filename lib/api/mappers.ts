@@ -198,12 +198,18 @@ function parseUserRole(role: string | number | undefined): number {
   return UserRole.ReadOnly;
 }
 
-const defaultApiBase =
-  typeof process !== "undefined"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
-        process.env.API_PROXY_TARGET?.replace(/\/$/, "") ||
-        "https://localhost:44302")
-    : "https://localhost:44302";
+const defaultApiBase = (() => {
+  if (typeof process === "undefined") return "https://localhost:44302";
+  const raw = (
+    process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ||
+    process.env.API_PROXY_TARGET?.replace(/\/$/, "") ||
+    "https://localhost:44302"
+  );
+  if (raw.startsWith("http://localhost")) {
+    return raw.replace("://localhost", "://127.0.0.1");
+  }
+  return raw;
+})();
 
 // --- Mappers API → modèle front ---
 
@@ -746,11 +752,11 @@ export function toCreateAccountingSchemaBody(values: {
 
 /** Payload POST/PUT ligne de schéma comptable. */
 export function toSchemaLineBody(values: {
-  lineOrder?: number;
+  lineOrder?: number | string;
   accountCode?: string;
-  accountType?: number;
+  accountType?: number | string;
   accountExpression?: string;
-  side?: number;
+  side?: number | string;
   amountFormula?: string;
   label?: string;
   code?: string;
@@ -759,12 +765,15 @@ export function toSchemaLineBody(values: {
   isConditional?: boolean;
   condition?: string;
 }) {
+  const lineOrder = Number(values.lineOrder);
+  const accountType = Number(values.accountType);
+  const side = Number(values.side);
   return {
-    lineOrder: values.lineOrder ?? 1,
+    lineOrder: Number.isFinite(lineOrder) && lineOrder >= 1 ? lineOrder : 1,
     accountCode: values.accountCode?.trim() ?? "",
-    accountType: values.accountType ?? 0,
+    accountType: Number.isFinite(accountType) ? accountType : 0,
     accountExpression: values.accountExpression?.trim() || null,
-    side: values.side ?? 0,
+    side: Number.isFinite(side) ? side : 0,
     amountFormula: values.amountFormula?.trim() ?? "AMOUNT",
     label: values.label?.trim() || "Ligne",
     code: values.code?.trim() || null,

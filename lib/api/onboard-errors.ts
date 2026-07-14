@@ -3,17 +3,26 @@ import { ApiError } from "./client";
 export const ONBOARD_ERROR_MESSAGES: Record<string, string> = {
   PARTNER_NOT_FOUND: "Partenaire introuvable. Rafraîchissez la liste des partenaires.",
   PARTNER_INACTIVE: "Le partenaire est désactivé. Activez-le d'abord.",
-  BANK_KYC_FAILED: "Échec de la vérification KYC bancaire. Réessayez ou contactez le support.",
-  WALLET_KYC_FAILED: "Échec de la vérification KYC wallet. Réessayez ou contactez le support.",
+  BANK_KYC_FAILED:
+    "Échec de la vérification KYC bancaire. Vérifiez le compte bancaire et réessayez.",
+  WALLET_KYC_FAILED:
+    "Échec de la vérification KYC wallet. Vérifiez le téléphone et le code OTP, puis réessayez.",
   KYC_MISMATCH:
     "Les données KYC banque et wallet ne correspondent pas.",
-  WALLET_LINK_FAILED: "Échec de la liaison wallet / compte bancaire.",
+  WALLET_LINK_FAILED:
+    "Échec de la liaison wallet / compte bancaire. Vérifiez le code OTP.",
   SUBSCRIPTION_DUPLICATE:
     "Une souscription active existe déjà pour ce compte et ce téléphone.",
   PARTNER_APIKEY_MISSING:
     "Clé API manquante pour lancer l'onboarding.",
   VALIDATION_ERROR: "Requête invalide — vérifiez les champs saisis.",
   ONBOARD_INVALID_RESPONSE: "Réponse serveur inattendue après onboarding.",
+  NETWORK_ERROR:
+    "Connexion interrompue. Si l'API a répondu OK, la souscription existe peut‑être déjà — consultez la liste.",
+  TIMEOUT:
+    "Délai dépassé. L'onboarding a souvent déjà réussi côté API — vérifiez la liste des souscriptions.",
+  BACKEND_UNAVAILABLE:
+    "Backend injoignable via le proxy. Vérifiez https://localhost:44302 et API_PROXY_TARGET.",
   CLIENT_NOT_FOUND: "Client introuvable.",
   KYC_NOT_FOUND: "Aucun abonnement pour ce numéro chez ce partenaire.",
 };

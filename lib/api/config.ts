@@ -7,5 +7,13 @@ export function getApiBaseUrl(): string {
   // Navigateur : même origine → proxy Next.js (évite CORS + certificat auto-signé).
   if (typeof window !== "undefined") return "";
   // SSR / scripts : cible directe du back.
-  return (process.env.API_PROXY_TARGET ?? "https://localhost:44302").replace(/\/$/, "");
+  const raw = (process.env.API_PROXY_TARGET ?? "https://localhost:44302").replace(
+    /\/$/,
+    "",
+  );
+  // IPv4 forcé seulement en HTTP ; HTTPS local (IIS) doit rester sur localhost.
+  if (raw.startsWith("http://localhost")) {
+    return raw.replace("://localhost", "://127.0.0.1");
+  }
+  return raw;
 }

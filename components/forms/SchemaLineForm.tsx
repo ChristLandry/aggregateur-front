@@ -124,7 +124,7 @@ export function SchemaLineForm({
         requestAnimationFrame(() => lineOrderInputRef.current?.focus());
         return;
       }
-      throw e;
+      // onError de la mutation a déjà notifié — ne pas remonter d'AxiosError brut.
     }
   }
 

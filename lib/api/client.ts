@@ -164,6 +164,7 @@ apiClient.interceptors.response.use(
 
     const raw = error.response?.data as
       | (ApiResponse<unknown> & Record<string, unknown>)
+      | string
       | undefined;
 
     // ApiResponse métier (ex. BadRequest ToResponse / Fail)
@@ -185,25 +186,54 @@ apiClient.interceptors.response.use(
         return Promise.reject(apiErr);
       }
 
-      // ProblemDetails ASP.NET (validation model binding)
+      // ProblemDetails ASP.NET / proxy Bad Gateway
       const problem = raw as {
         title?: string;
         detail?: string;
+        code?: string;
         errors?: Record<string, string[]>;
       };
-      if (problem.errors || problem.title) {
+      if (problem.errors || problem.title || problem.detail) {
         const details = problem.errors
           ? Object.entries(problem.errors)
               .map(([k, v]) => `${k}: ${(v ?? []).join(", ")}`)
               .join(" · ")
           : problem.detail ?? problem.title;
+        const code =
+          problem.code === "ECONNREFUSED" || status === 502
+            ? "BACKEND_UNAVAILABLE"
+            : "VALIDATION_ERROR";
         return Promise.reject(
-          new ApiError(details || "Requête invalide", "VALIDATION_ERROR"),
+          new ApiError(details || "Requête invalide", code),
         );
       }
     }
 
-    return Promise.reject(error);
+    // Toujours normaliser : évite les AxiosError bruts dans la console UI.
+    if (!error.response) {
+      const aborted =
+        error.code === "ECONNABORTED" ||
+        /timeout/i.test(error.message ?? "");
+      return Promise.reject(
+        new ApiError(
+          aborted
+            ? "Délai dépassé. L'opération a peut‑être réussi côté serveur — vérifiez la liste des souscriptions."
+            : "Impossible de joindre le serveur. Vérifiez que l'API est démarrée.",
+          aborted ? "TIMEOUT" : "NETWORK_ERROR",
+        ),
+      );
+    }
+    if (status && status >= 500) {
+      return Promise.reject(
+        new ApiError(
+          "Le serveur a renvoyé une erreur interne. Réessayez ou vérifiez que l'API tourne.",
+          "BACKEND_ERROR",
+        ),
+      );
+    }
+    return Promise.reject(
+      new ApiError(error.message || "Erreur HTTP", `HTTP_${status ?? "ERR"}`),
+    );
   },
 );
 

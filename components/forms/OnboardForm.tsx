@@ -247,8 +247,12 @@ export function OnboardForm({
             <FormItem>
               <FormLabel>Téléphone</FormLabel>
               <FormControl>
-                <Input placeholder="0748556806" maxLength={20} {...field} />
+                <Input placeholder="774855680" maxLength={20} {...field} />
               </FormControl>
+              <FormDescription>
+                Numéro wallet (sans espaces). Pour WAVE, c&apos;est l&apos;alias
+                MSISDN envoyé au connecteur.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
